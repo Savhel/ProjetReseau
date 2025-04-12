@@ -1,0 +1,1 @@
+web: java -jar target/product-management-api-1.0-SNAPSHOT.jar

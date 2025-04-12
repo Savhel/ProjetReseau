@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <conversionRule conversionWord="highlight"
+                    converterClass="yowyob.resource.management.helpers.LogbackHighlighter"/>
+
+    <!-- Appender for General Logs -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %cyan(%-25logger{0}) - %highlight(%msg)</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Appender for yowyob.resource.management -->
+    <appender name="YOWYOB_APPENDER" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %cyan(%-25class{0}) - %highlight(%msg)</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Logger for yowyob.resource.management -->
+    <logger name="yowyob.resource.management" level="DEBUG" additivity="false">
+        <appender-ref ref="YOWYOB_APPENDER"/>
+    </logger>
+
+    <!-- Root Logger for all other logs -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

@@ -1,0 +1,40 @@
+package yowyob.resource.management.services.service;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import yowyob.resource.management.events.service.ServiceEvent;
+import org.springframework.beans.factory.annotation.Autowired;
+import yowyob.resource.management.actions.service.ServiceAction;
+import yowyob.resource.management.services.product.ProductEntityManager;
+
+
+@org.springframework.stereotype.Service
+public class ServiceEntityManager {
+    private final ApplicationEventPublisher eventPublisher;
+    private final ServiceActionExecutor serviceActionExecutor;
+    private static final Logger logger = LoggerFactory.getLogger(ProductEntityManager.class);
+
+    @Autowired
+    public ServiceEntityManager(ApplicationEventPublisher eventPublisher, ServiceActionExecutor serviceActionExecutor) {
+        this.eventPublisher = eventPublisher;
+        this.serviceActionExecutor = serviceActionExecutor;
+    }
+
+    public void triggerServiceEvent(ServiceAction action, LocalDateTime eventStartDateTime) {
+        logger.info("Triggering Service Event for entityId: {} with action: {} at: {}",
+                action.getEntityId(), action.getActionType(), eventStartDateTime);
+
+        eventPublisher.publishEvent(new ServiceEvent(this, action, eventStartDateTime));
+    }
+
+    public Optional<?> executeAction(ServiceAction serviceAction) {
+        logger.info("Executing Service Action: {} for entityId: {}",
+                serviceAction.getActionType(), serviceAction.getEntityId());
+
+        return this.serviceActionExecutor.executeAction(serviceAction);
+    }
+}
