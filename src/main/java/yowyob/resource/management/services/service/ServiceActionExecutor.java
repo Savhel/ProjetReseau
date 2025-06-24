@@ -13,8 +13,7 @@ import yowyob.resource.management.services.policy.executors.ServiceExecutorPolic
 import yowyob.resource.management.exceptions.policy.ExecutorPolicyViolationException;
 
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
@@ -24,13 +23,21 @@ public class ServiceActionExecutor implements Executor {
     private final ServiceExecutorPolicy serviceExecutorPolicy;
     private final AtomicBoolean paused = new AtomicBoolean(false);
     private final BlockingQueue<Action> waitingActions = new LinkedBlockingQueue<>();
+    private final ExecutorService executorService;
     private static final Logger logger = LoggerFactory.getLogger(ServiceActionExecutor.class);
+    private static final int THREAD_POOL_SIZE = 10;
     
     @Autowired
     public ServiceActionExecutor(ServiceExecutorPolicy serviceExecutorPolicy,
                                  ServiceRepository serviceRepository) {
         this.serviceExecutorPolicy = serviceExecutorPolicy;
         this.serviceRepository = serviceRepository;
+        this.executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE,
+            r -> {
+                Thread t = new Thread(r, "ServiceActionExecutor-" + System.currentTimeMillis());
+                t.setDaemon(true);
+                return t;
+            });
     }
 
     public Optional<?> executeAction(Action action) throws ExecutorPolicyViolationException {
@@ -84,11 +91,47 @@ public class ServiceActionExecutor implements Executor {
         }
 
         logger.info("ServiceActionExecutor is processing queued actions before resuming...");
+        
+        // Process all waiting actions in parallel
+        CompletableFuture<Void>[] futures = new CompletableFuture[waitingActions.size()];
+        int index = 0;
+        
         while (!this.waitingActions.isEmpty()) {
             Action action = this.waitingActions.poll();
-            executeAction(action);
+            futures[index++] = CompletableFuture.runAsync(() -> {
+                try {
+                    executeServiceAction(action);
+                } catch (Exception e) {
+                    logger.error("Error executing queued action: {}", e.getMessage(), e);
+                }
+            }, executorService);
         }
+        
+        // Wait for all actions to complete
+        try {
+            CompletableFuture.allOf(futures).get(30, TimeUnit.SECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            logger.error("Error waiting for queued actions to complete: {}", e.getMessage(), e);
+        }
+        
         paused.set(false);
         logger.info("All waiting actions have been processed. ServiceActionExecutor is now RESUMED.");
+    }
+    
+    /**
+     * Shutdown the executor service gracefully
+     */
+    public void shutdown() {
+        logger.info("Shutting down ServiceActionExecutor...");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        logger.info("ServiceActionExecutor shutdown completed.");
     }
 }

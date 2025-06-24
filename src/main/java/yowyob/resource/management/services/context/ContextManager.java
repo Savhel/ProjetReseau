@@ -67,7 +67,7 @@ public class ContextManager {
 
     public void rollback() {
         logger.info("Starting Context rollback");
-        while (!contextStack.isEmpty()) {
+        while (!contextStack.empty()) {
             Command command = contextStack.pop();
 
             if (command instanceof Action action) {

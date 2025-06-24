@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Component
 public class ServiceUpdater implements Updater {
@@ -38,6 +39,7 @@ public class ServiceUpdater implements Updater {
     @Getter
     private final Map<UUID, List<Event>> scheduledEvents = new ConcurrentHashMap<>();
     private final Map<UUID, List<Tuple<Event, ScheduledFuture<?>>>> scheduledFutures = new ConcurrentHashMap<>();
+    private final ReentrantReadWriteLock eventLock = new ReentrantReadWriteLock();
     private final AtomicBoolean paused = new AtomicBoolean(false);
     private final BlockingQueue<Event> waitingEvents = new LinkedBlockingQueue<>();
     private static final Logger logger = LoggerFactory.getLogger(ServiceUpdater.class);
@@ -53,7 +55,9 @@ public class ServiceUpdater implements Updater {
 
     @Override
     @EventListener
-    public synchronized void handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+    public void handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+        eventLock.writeLock().lock();
+        try {
         if (event != null) {
             logger.info("Received event of class: {} {}", event.getEventClass(),
                     event.getEventClass() == EventClass.Service ? "" : "unmanaged, passing");
@@ -77,13 +81,21 @@ public class ServiceUpdater implements Updater {
                 }
             }
         }
+        } finally {
+            eventLock.writeLock().unlock();
+        }
     }
 
-    public synchronized void forceEventScheduling(Event event) {
+    public void forceEventScheduling(Event event) {
+        eventLock.writeLock().lock();
+        try {
         ServiceEvent serviceEvent = (ServiceEvent) event;
         logger.info("Service Event scheduling for entityId: {} at {} without Policy verification",
                 serviceEvent.getEntityId(), serviceEvent.getEventStartDateTime());
         scheduleTask(serviceEvent);
+        } finally {
+            eventLock.writeLock().unlock();
+        }
     }
 
     private void scheduleTask(ServiceEvent serviceEvent) throws UpdaterPolicyViolationException {
@@ -116,34 +128,39 @@ public class ServiceUpdater implements Updater {
         logger.info("Successfully executed scheduled Service Action for entityId: {}", action.getEntityId());
     }
 
-    public synchronized void unscheduleEvent(Event event) {
-        if (event instanceof ServiceEvent serviceEvent) {
-            UUID entityId = serviceEvent.getEntityId();
-            List<Event> events = scheduledEvents.get(entityId);
-            if (events != null && events.remove(serviceEvent)) {
-                if (events.isEmpty()) {
-                    scheduledEvents.remove(entityId);
+    public void unscheduleEvent(Event event) {
+        eventLock.writeLock().lock();
+        try {
+            if (event instanceof ServiceEvent serviceEvent) {
+                UUID entityId = serviceEvent.getEntityId();
+                List<Event> events = scheduledEvents.get(entityId);
+                if (events != null && events.remove(serviceEvent)) {
+                    if (events.isEmpty()) {
+                        scheduledEvents.remove(entityId);
+                    }
+                } else {
+                    logger.warn("No scheduled event found for entityId: {}", entityId);
                 }
-            } else {
-                logger.warn("No scheduled event found for entityId: {}", entityId);
-            }
 
-            List<Tuple<Event, ScheduledFuture<?>>> futures = scheduledFutures.get(entityId);
-            Tuple<Event, ScheduledFuture<?>> futureRecord = futures.stream()
-                    .filter(tuple -> tuple.getFirst().equals(event))
-                    .findFirst()
-                    .orElse(null);
+                List<Tuple<Event, ScheduledFuture<?>>> futures = scheduledFutures.get(entityId);
+                Tuple<Event, ScheduledFuture<?>> futureRecord = futures.stream()
+                        .filter(tuple -> tuple.getFirst().equals(event))
+                        .findFirst()
+                        .orElse(null);
 
-            if (futureRecord != null && futures.remove(futureRecord)) {
-                futureRecord.getSecond().cancel(true);
-                if (futures.isEmpty()) {
-                    scheduledFutures.remove(entityId);
+                if (futureRecord != null && futures.remove(futureRecord)) {
+                    futureRecord.getSecond().cancel(true);
+                    if (futures.isEmpty()) {
+                        scheduledFutures.remove(entityId);
+                    }
+                } else {
+                    logger.warn("No scheduled event found for entityId: {}", entityId);
                 }
-            } else {
-                logger.warn("No scheduled event found for entityId: {}", entityId);
-            }
 
-            logger.info("Successfully unscheduled event for entityId: {}", entityId);
+                logger.info("Successfully unscheduled event for entityId: {}", entityId);
+            }
+        } finally {
+            eventLock.writeLock().unlock();
         }
     }
 

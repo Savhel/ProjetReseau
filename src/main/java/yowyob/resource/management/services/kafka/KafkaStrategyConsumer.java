@@ -23,8 +23,8 @@ public class KafkaStrategyConsumer {
         logger.info("KafkaStrategyConsumer initialized successfully");
     }
 
-    @KafkaListener(topics = "${kafka.strategy-consume.topic}", groupId = "${kafka.strategy-consume.group-id}")
-    public synchronized void consume(ConsumerRecord<String, String> record) {
+    @KafkaListener(topics = "${kafka.strategy-consume.topic}", groupId = "${kafka.strategy-consume.group-id}", concurrency = "3")
+    public void consume(ConsumerRecord<String, String> record) {
         String strategy = record.key() != null ? record.key() : "{}";
         strategyEntityManager.processStrategy(strategy);
         logger.info("Received Kafka record - Key: {}, Partition: {}, Offset: {}", strategy, record.partition(), record.offset());

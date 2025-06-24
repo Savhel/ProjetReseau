@@ -13,8 +13,7 @@ import yowyob.resource.management.services.interfaces.executors.Executor;
 import yowyob.resource.management.services.policy.executors.ResourceExecutorPolicy;
 
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
@@ -23,13 +22,21 @@ public class ResourceActionExecutor implements Executor {
     private final ResourceExecutorPolicy resourceExecutorPolicy;
     private final AtomicBoolean paused = new AtomicBoolean(false);
     private final BlockingQueue<Action> waitingActions = new LinkedBlockingQueue<>();
-    private static final Logger logger = LoggerFactory.getLogger(ResourceUpdater.class);
+    private final ExecutorService executorService;
+    private static final Logger logger = LoggerFactory.getLogger(ResourceActionExecutor.class);
+    private static final int THREAD_POOL_SIZE = 10;
 
     @Autowired
     public ResourceActionExecutor(ResourceExecutorPolicy resourceExecutorPolicy,
                                   ResourceRepository resourceRepository) {
         this.resourceExecutorPolicy = resourceExecutorPolicy;
         this.resourceRepository = resourceRepository;
+        this.executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE,
+            r -> {
+                Thread t = new Thread(r, "ResourceActionExecutor-" + System.currentTimeMillis());
+                t.setDaemon(true);
+                return t;
+            });
     }
 
     @Override
@@ -64,7 +71,7 @@ public class ResourceActionExecutor implements Executor {
         return executeResourceAction(action);
     }
 
-    private synchronized Optional<?> executeResourceAction(Action action) {
+    private Optional<?> executeResourceAction(Action action) {
         ResourceAction resourceAction = (ResourceAction) action;
         Optional<?> result = resourceAction.execute(this.resourceRepository);
         logger.info("Action execution completed for Action: {} with entityId: {}",
@@ -86,11 +93,47 @@ public class ResourceActionExecutor implements Executor {
         }
 
         logger.info("ResourceActionExecutor is processing queued actions before resuming...");
+        
+        // Process all waiting actions in parallel
+        CompletableFuture<Void>[] futures = new CompletableFuture[waitingActions.size()];
+        int index = 0;
+        
         while (!this.waitingActions.isEmpty()) {
             Action action = this.waitingActions.poll();
-            executeAction(action);
+            futures[index++] = CompletableFuture.runAsync(() -> {
+                try {
+                    executeResourceAction(action);
+                } catch (Exception e) {
+                    logger.error("Error executing queued action: {}", e.getMessage(), e);
+                }
+            }, executorService);
         }
+        
+        // Wait for all actions to complete
+        try {
+            CompletableFuture.allOf(futures).get(30, TimeUnit.SECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            logger.error("Error waiting for queued actions to complete: {}", e.getMessage(), e);
+        }
+        
         paused.set(false);
         logger.info("All waiting actions have been processed. ResourceActionExecutor is now RESUMED.");
+    }
+    
+    /**
+     * Shutdown the executor service gracefully
+     */
+    public void shutdown() {
+        logger.info("Shutting down ResourceActionExecutor...");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        logger.info("ResourceActionExecutor shutdown completed.");
     }
 }

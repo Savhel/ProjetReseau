@@ -27,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Component
 public class ResourceUpdater implements Updater {
@@ -40,6 +41,7 @@ public class ResourceUpdater implements Updater {
     @Getter
     private final Map<UUID, List<Event>> scheduledEvents = new ConcurrentHashMap<>();
     private final Map<UUID, List<Tuple<Event, ScheduledFuture<?>>>> scheduledFutures = new ConcurrentHashMap<>();
+    private final ReentrantReadWriteLock eventLock = new ReentrantReadWriteLock();
     private static final Logger logger = LoggerFactory.getLogger(ResourceUpdater.class);
 
     @Autowired
@@ -53,7 +55,9 @@ public class ResourceUpdater implements Updater {
 
     @Override
     @EventListener
-    public synchronized void handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+    public void handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+        eventLock.writeLock().lock();
+        try {
         if (event != null) {
             logger.info("Received event of class: {}", event.getEventClass());
 
@@ -76,13 +80,21 @@ public class ResourceUpdater implements Updater {
                 }
             }
         }
+        } finally {
+            eventLock.writeLock().unlock();
+        }
     }
 
-    public synchronized void forceEventScheduling(Event event) {
+    public void forceEventScheduling(Event event) {
+        eventLock.writeLock().lock();
+        try {
         ResourceEvent resourceEvent = (ResourceEvent) event;
         logger.warn("Resource Event scheduling for entityId: {} at {} without Policy verification",
                 resourceEvent.getEntityId(), resourceEvent.getEventStartDateTime());
         scheduleTask(resourceEvent);
+        } finally {
+            eventLock.writeLock().unlock();
+        }
     }
 
     private void scheduleTask(ResourceEvent resourceEvent) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
@@ -115,7 +127,9 @@ public class ResourceUpdater implements Updater {
         logger.info("Successfully executed scheduled Resource Action for entityId: {}", action.getEntityId());
     }
 
-    public synchronized void unscheduleEvent(Event event) {
+    public void unscheduleEvent(Event event) {
+        eventLock.writeLock().lock();
+        try {
         if (event instanceof ResourceEvent resourceEvent) {
             UUID entityId = resourceEvent.getEntityId();
             List<Event> events = scheduledEvents.get(entityId);
@@ -145,6 +159,9 @@ public class ResourceUpdater implements Updater {
             logger.info("Successfully unscheduled event for entityId: {}", entityId);
         } else {
             logger.warn("Invalid event type received for un-scheduling.");
+        }
+        } finally {
+            eventLock.writeLock().unlock();
         }
     }
 
