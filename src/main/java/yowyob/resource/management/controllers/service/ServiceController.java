@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.services.product.ProductEntityManager;
 import yowyob.resource.management.actions.service.operations.ServiceUpdateAction;
@@ -32,8 +32,8 @@ public class ServiceController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createService(@RequestBody Service service) {
-        productEntityManager.executeAction(new ServiceCreationAction(service));
+    public ResponseEntity<?> createService(@RequestBody Services services) {
+        productEntityManager.executeAction(new ServiceCreationAction(services));
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
@@ -44,8 +44,8 @@ public class ServiceController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateService(@RequestBody Service service) {
-        ServiceAction action = new ServiceUpdateAction(service);
+    public ResponseEntity<?> updateService(@RequestBody Services services) {
+        ServiceAction action = new ServiceUpdateAction(services);
         return ResponseEntity.ok(productEntityManager.executeAction(action));
     }
 
@@ -57,8 +57,8 @@ public class ServiceController {
 
 
     @PostMapping("/schedule/create")
-    public ResponseEntity<?> scheduleCreate(@RequestBody Service service, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ServiceCreationAction(service));
+    public ResponseEntity<?> scheduleCreate(@RequestBody Services services, @RequestParam LocalDateTime startDateTime) {
+        this.productEntityManager.scheduleEvent(startDateTime, new ServiceCreationAction(services));
         return ResponseEntity.accepted().build();
     }
 
@@ -70,8 +70,8 @@ public class ServiceController {
     }
 
     @PutMapping("/schedule/update")
-    public ResponseEntity<?> scheduleUpdate(@RequestBody Service service, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ServiceUpdateAction(service));
+    public ResponseEntity<?> scheduleUpdate(@RequestBody Services services, @RequestParam LocalDateTime startDateTime) {
+        this.productEntityManager.scheduleEvent(startDateTime, new ServiceUpdateAction(services));
         return ResponseEntity.accepted().build();
     }
 

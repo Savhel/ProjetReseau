@@ -25,14 +25,14 @@ public class ServiceEntityManager {
     }
 
     public void triggerServiceEvent(ServiceAction action, LocalDateTime eventStartDateTime) {
-        logger.info("Triggering Service Event for entityId: {} with action: {} at: {}",
+        logger.info("Triggering Services Event for entityId: {} with action: {} at: {}",
                 action.getEntityId(), action.getActionType(), eventStartDateTime);
 
         eventPublisher.publishEvent(new ServiceEvent(this, action, eventStartDateTime));
     }
 
     public Optional<?> executeAction(ServiceAction serviceAction) {
-        logger.info("Executing Service Action: {} for entityId: {}",
+        logger.info("Executing Services Action: {} for entityId: {}",
                 serviceAction.getActionType(), serviceAction.getEntityId());
 
         return this.serviceActionExecutor.executeAction(serviceAction);

@@ -89,11 +89,11 @@ public class StrategyBuilder {
             switch (serviceAction.getActionType()) {
                 case CREATE -> {
                     ServiceCreationAction createAction = (ServiceCreationAction) serviceAction;
-                    actionNode.set("params", objectMapper.valueToTree(createAction.getServiceToSave()));
+                    actionNode.set("params", objectMapper.valueToTree(createAction.getServicesToSave()));
                 }
                 case UPDATE -> {
                     ServiceUpdateAction updateAction = (ServiceUpdateAction) serviceAction;
-                    actionNode.set("params", objectMapper.valueToTree(updateAction.getServiceToUpdate()));
+                    actionNode.set("params", objectMapper.valueToTree(updateAction.getServicesToUpdate()));
                 }
                 case CUSTOM -> {
                     ServiceCustomAction customAction = (ServiceCustomAction) serviceAction;

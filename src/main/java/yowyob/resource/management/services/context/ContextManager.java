@@ -3,6 +3,8 @@ package yowyob.resource.management.services.context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import org.springframework.stereotype.Service;
 import yowyob.resource.management.events.Event;
@@ -53,12 +55,14 @@ public class ContextManager {
         logger.info("Successfully initialized context");
     }
 
+    @CacheEvict(value = "execution-contexts", key = "'current-context'")
     public void pushAction(Action action) {
         contextStack.push(action);
         logger.info("Action : Class= {}, Type={}, entityId={} has been pushed to the ContextManager",
                 action.getActionClass(), action.getActionType(), action.getEntityId());
     }
 
+    @CacheEvict(value = "execution-contexts", key = "'current-context'")
     public void pushEvent(Event event) {
         contextStack.push(event);
         logger.info("Event : Class= {}, ActionType={}, entityId={}, start={} has been pushed to ContextManager",

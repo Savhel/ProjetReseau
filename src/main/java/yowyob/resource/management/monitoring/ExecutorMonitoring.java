@@ -53,7 +53,7 @@ public class ExecutorMonitoring {
 
         // Timers for execution time
         serviceActionExecutionTime = Timer.builder("service.action.execution.time")
-                .description("Service action execution time")
+                .description("Services action execution time")
                 .register(meterRegistry);
 
         resourceActionExecutionTime = Timer.builder("resource.action.execution.time")
@@ -138,7 +138,7 @@ public class ExecutorMonitoring {
     public void logExecutorStats() {
         if (serviceActionExecutorPool != null) {
             ThreadPoolExecutor serviceExecutor = serviceActionExecutorPool.getThreadPoolExecutor();
-            logger.info("Service Executor Stats - Active: {}, Pool Size: {}, Queue Size: {}, Completed: {}",
+            logger.info("Services Executor Stats - Active: {}, Pool Size: {}, Queue Size: {}, Completed: {}",
                     serviceExecutor.getActiveCount(),
                     serviceExecutor.getPoolSize(),
                     serviceExecutor.getQueue().size(),
@@ -146,7 +146,7 @@ public class ExecutorMonitoring {
 
             // Alert if queue is getting full
             if (serviceExecutor.getQueue().size() > serviceExecutor.getQueue().remainingCapacity() * 0.8) {
-                logger.warn("Service Executor queue is {}% full! Consider increasing pool size or queue capacity",
+                logger.warn("Services Executor queue is {}% full! Consider increasing pool size or queue capacity",
                         (serviceExecutor.getQueue().size() * 100) / 
                         (serviceExecutor.getQueue().size() + serviceExecutor.getQueue().remainingCapacity()));
             }

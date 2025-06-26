@@ -123,7 +123,7 @@ public class ActionProducerService {
     @Value("${kafka.topic.resource-actions}")
     private String resourceActionsTopic;
 
-    @Value("${kafka.topic.service-actions}")
+    @Value("${kafka.topic.services-actions}")
     private String serviceActionsTopic;
 
     @Autowired
@@ -159,20 +159,20 @@ public class ActionProducerService {
             .addCallback(new ListenableFutureCallback<SendResult<String, Action>>() {
                 @Override
                 public void onSuccess(SendResult<String, Action> result) {
-                    logger.info("Service action sent successfully: {} - {} - {}", 
+                    logger.info("Services action sent successfully: {} - {} - {}", 
                                  action.getEntityId(), action.getActionType(), result.getRecordMetadata().offset());
                 }
 
                 @Override
                 public void onFailure(Throwable ex) {
-                    logger.error("Failed to send service action: {}", ex.getMessage());
+                    logger.error("Failed to send services action: {}", ex.getMessage());
                 }
             });
     }
 }
 ```
 
-Le service de production des messages est responsable de l'envoi des actions vers les topics Kafka appropriés. Points importants :
+Le services de production des messages est responsable de l'envoi des actions vers les topics Kafka appropriés. Points importants :
 
 - Utilisation de clés basées sur l'ID de l'entité pour garantir l'ordre des messages pour une même entité
 - Gestion asynchrone des résultats d'envoi avec des callbacks
@@ -215,32 +215,32 @@ public class ActionConsumerService {
         }
     }
 
-    @KafkaListener(topics = "${kafka.topic.service-actions}", groupId = "${kafka.consumer.group-id}")
+    @KafkaListener(topics = "${kafka.topic.services-actions}", groupId = "${kafka.consumer.group-id}")
     public void consumeServiceAction(ConsumerRecord<String, Action> record, Acknowledgment ack) {
         try {
-            logger.info("Received service action: {} - {}", record.key(), record.value().getActionType());
+            logger.info("Received services action: {} - {}", record.key(), record.value().getActionType());
             
             Action action = record.value();
             if (action instanceof ServiceAction) {
                 serviceActionExecutor.executeAction(action);
-                logger.info("Service action executed successfully: {}", record.key());
+                logger.info("Services action executed successfully: {}", record.key());
             } else {
-                logger.error("Invalid action type received on service-actions topic: {}", action.getClass().getName());
+                logger.error("Invalid action type received on services-actions topic: {}", action.getClass().getName());
             }
             
             ack.acknowledge(); // Confirmer le traitement du message
         } catch (ExecutorPolicyViolationException e) {
-            logger.warn("Policy violation for service action: {}", e.getMessage());
+            logger.warn("Policy violation for services action: {}", e.getMessage());
             ack.acknowledge(); // Acquitter malgré l'erreur car retraiter ne résoudra pas le problème
         } catch (Exception e) {
-            logger.error("Error processing service action: {}", e.getMessage());
+            logger.error("Error processing services action: {}", e.getMessage());
             // Stratégie de gestion des erreurs : pas d'acquittement pour retraiter le message
         }
     }
 }
 ```
 
-Le service de consommation des messages est responsable du traitement des actions reçues des topics Kafka. Points importants :
+Le services de consommation des messages est responsable du traitement des actions reçues des topics Kafka. Points importants :
 
 - Utilisation de l'annotation `@KafkaListener` pour s'abonner aux topics
 - Validation du type d'action avant traitement
@@ -426,7 +426,7 @@ private int calculateOptimalConcurrency() {
 
 ### 3. Gestion des Transactions Distribuées
 
-**Problème** : Les actions qui impliquent plusieurs entités (par exemple, la création d'un service qui nécessite plusieurs ressources) peuvent être difficiles à coordonner de manière atomique.
+**Problème** : Les actions qui impliquent plusieurs entités (par exemple, la création d'un services qui nécessite plusieurs ressources) peuvent être difficiles à coordonner de manière atomique.
 
 #### Architecture Actuelle - Transactions Non Coordonnées
 
@@ -750,7 +750,7 @@ public NewTopic resourceActionsTopic() {
 
 @Bean
 public NewTopic serviceActionsTopic() {
-    return TopicBuilder.name("service-actions")
+    return TopicBuilder.name("services-actions")
                       .partitions(5) // Moins de partitions car moins de services que de ressources
                       .replicas(3)
                       .config(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(7 * 24 * 60 * 60 * 1000L))

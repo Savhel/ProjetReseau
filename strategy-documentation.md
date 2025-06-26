@@ -2,7 +2,7 @@
 
 ## Descriptif
 
-Ce document décrit le format de stratégie utilisé pour la communication entre les autres microservices et le `service de gestion des Ressources` via Kafka.
+Ce document décrit le format de stratégie utilisé pour la communication entre les autres microservices et le `services de gestion des Ressources` via Kafka.
 
 ## Structure de Base
 
@@ -81,7 +81,7 @@ Le champ `params` est optionnel. Il peut contenir des informations supplémentai
     {
       "entityId": "550e8400-e29b-41d4-a716-446655440001",
       "actionType": "CREATE",
-      "actionClass": "Service",
+      "actionClass": "Services",
       "eventStartDateTime": "2024-02-06T10:00:00",
       "params": {
         "name": "Voyage 45",
@@ -122,7 +122,7 @@ Le champ `params` est optionnel. Il peut contenir des informations supplémentai
     {
       "entityId": "550e8400-e29b-41d4-a716-446655440004",
       "actionType": "UPDATE",
-      "actionClass": "Service",
+      "actionClass": "Services",
       "eventStartDateTime": "2024-02-06T11:30:00",
       "params": {
         "state" : "ONGOING"

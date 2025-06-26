@@ -12,12 +12,12 @@ import org.springframework.data.cassandra.core.mapping.PrimaryKey;
 import yowyob.resource.management.models.product.Product;
 import yowyob.resource.management.models.service.enums.ServiceStatus;
 
-@Table
+@Table("service")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-public class Service extends Product {
+public class Services extends Product {
 
     @Setter
     @PrimaryKey

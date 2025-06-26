@@ -6,10 +6,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.actions.service.operations.ServiceUpdateAction;
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.models.service.enums.ServiceStatus;
 import yowyob.resource.management.repositories.service.ServiceRepository;
@@ -25,6 +26,12 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
     private final ServiceTransitionValidator transitionValidator;
     private final ServiceStatusBasedOperationValidator statusValidator;
     private final static Logger logger = LoggerFactory.getLogger(ServiceExecutorPolicy.class);
+
+    @Cacheable(value = "policy-validations", key = "'service-' + #action.entityId + '-' + #action.actionType")
+    public boolean validateActionPolicy(Action action) {
+        logger.debug("Validating policy for action: {} with entityId: {}", action.getActionType(), action.getEntityId());
+        return isExecutionAllowed(action);
+    }
 
     @Autowired
     public ServiceExecutorPolicy(ServiceRepository serviceRepository, ServiceTransitionValidator transitionValidator, ServiceStatusBasedOperationValidator statusValidator) {
@@ -42,24 +49,24 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
 
         boolean decision = switch (serviceAction.getActionType()) {
             case CREATE -> {
-                Optional<Service> service = this.serviceRepository.findById(serviceAction.getEntityId());
+                Optional<Services> service = this.serviceRepository.findById(serviceAction.getEntityId());
                 yield service.isEmpty();
             }
 
             case READ -> {
-                Optional<Service> service = this.serviceRepository.findById(serviceAction.getEntityId());
+                Optional<Services> service = this.serviceRepository.findById(serviceAction.getEntityId());
                 yield service.isPresent();
             }
 
             case UPDATE -> {
                 ServiceUpdateAction serviceUpdateAction = (ServiceUpdateAction) serviceAction;
-                Optional<Service> currentService = serviceRepository.findById(serviceAction.getEntityId());
+                Optional<Services> currentService = serviceRepository.findById(serviceAction.getEntityId());
 
                 if (currentService.isEmpty()) {
                     throw new ExecutorPolicyViolationException(action, "Service not found");
                 }
 
-                ServiceStatus targetStatus = serviceUpdateAction.getServiceToUpdate().getStatus();
+                ServiceStatus targetStatus = serviceUpdateAction.getServicesToUpdate().getStatus();
                 ServiceStatus currentStatus = currentService.get().getStatus();
                 if (!this.transitionValidator.isTransitionAllowed(currentStatus, targetStatus)) {
                     throw new ExecutorPolicyViolationException(action,
@@ -70,7 +77,7 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
             }
 
             case DELETE -> {
-                Optional<Service> currentService = serviceRepository.findById(serviceAction.getEntityId());
+                Optional<Services> currentService = serviceRepository.findById(serviceAction.getEntityId());
                 if (currentService.isEmpty()) {
                     throw new ExecutorPolicyViolationException(action, "Service not found.");
                 }

@@ -6,7 +6,7 @@ import yowyob.resource.management.commons.Command;
 import yowyob.resource.management.events.Event;
 import yowyob.resource.management.actions.Action;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.models.resource.Resource;
 import yowyob.resource.management.actions.enums.ActionType;
 import yowyob.resource.management.actions.enums.ActionClass;
@@ -139,11 +139,11 @@ public class StrategyConverter {
         }
     }
 
-    private Service parseServiceFromParams(JsonNode paramsNode) {
+    private Services parseServiceFromParams(JsonNode paramsNode) {
         try {
-            return objectMapper.treeToValue(paramsNode, Service.class);
+            return objectMapper.treeToValue(paramsNode, Services.class);
         } catch (IOException e) {
-            throw new InvalidJsonFormatException("Error converting JSON → Service: " + e.getMessage(), e);
+            throw new InvalidJsonFormatException("Error converting JSON → Services: " + e.getMessage(), e);
         }
     }
 

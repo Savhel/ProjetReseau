@@ -7,17 +7,17 @@ import org.junit.jupiter.api.Nested;
 import org.springframework.boot.test.context.SpringBootTest;
 import yowyob.resource.management.Application;
 import yowyob.resource.management.actions.Action;
-import yowyob.resource.management.actions.service.ServiceAction;
+import yowyob.resource.management.actions.services.ServiceAction;
 import yowyob.resource.management.commons.Command;
 import yowyob.resource.management.events.Event;
 import yowyob.resource.management.exceptions.StrategyConversionException;
 import yowyob.resource.management.models.resource.Resource;
 import yowyob.resource.management.models.resource.enums.ResourceStatus;
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.services.Services;
 import yowyob.resource.management.actions.resource.operations.*;
-import yowyob.resource.management.actions.service.operations.*;
-import yowyob.resource.management.events.service.ServiceEvent;
-import yowyob.resource.management.models.service.enums.ServiceStatus;
+import yowyob.resource.management.actions.services.operations.*;
+import yowyob.resource.management.events.services.ServiceEvent;
+import yowyob.resource.management.models.services.enums.ServiceStatus;
 import yowyob.resource.management.services.strategy.StrategyBuilder;
 import yowyob.resource.management.services.strategy.StrategyConverter;
 
@@ -87,7 +87,7 @@ class StrategyTests {
                 "strategies": [{
                     "entityId": "550e8400-e29b-41d4-a716-446655440000",
                     "actionType": "UPDATE",
-                    "actionClass": "Service",
+                    "actionClass": "Services",
                     "eventStartDateTime": "%s",
                     "params": {
                         "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -189,11 +189,11 @@ class StrategyTests {
         void testBuildServiceEvents() throws Exception {
             // Given
             List<Event> events = new ArrayList<>();
-            Service service = new Service();
-            service.setId(UUID.randomUUID());
-            service.setStatus(ServiceStatus.PLANNED);
+            Services services = new Services();
+            services.setId(UUID.randomUUID());
+            services.setStatus(ServiceStatus.PLANNED);
 
-            ServiceAction action = new ServiceUpdateAction(service);
+            ServiceAction action = new ServiceUpdateAction(services);
             LocalDateTime eventTime = LocalDateTime.now().plusMinutes(20);
             events.add(new ServiceEvent(this, action, eventTime));
 
@@ -202,7 +202,7 @@ class StrategyTests {
 
             // Then
             assertTrue(json.contains("UPDATE"));
-            assertTrue(json.contains("Service"));
+            assertTrue(json.contains("Services"));
             assertTrue(json.contains("PLANNED"));
             assertTrue(json.contains(eventTime.toString()));
         }

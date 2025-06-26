@@ -16,8 +16,8 @@ Nous avons complètement résolu le premier goulot d'étranglement critique en t
 ### 3. Configuration Application (application.properties)
 ```
 # Pools de threads configurables
-app.executor.service.core-pool-size=10
-app.executor.service.max-pool-size=20
+app.executor.services.core-pool-size=10
+app.executor.services.max-pool-size=20
 app.executor.resource.core-pool-size=10
 app.executor.resource.max-pool-size=20
 app.executor.queue-capacity=1000

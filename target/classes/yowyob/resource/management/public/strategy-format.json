@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Strategy Format",
+  "version": "1.0.0",
+  "type": "object",
+  "required": ["strategies"],
+  "properties": {
+    "strategies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entityId", "actionType", "actionClass"],
+        "allOf": [
+          {
+            "properties": {
+              "entityId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Identifiant unique de l'entité (Ressouce ou Service)"
+              },
+              "actionType": {
+                "type": "string",
+                "enum": ["CREATE", "READ", "UPDATE", "DELETE", "CUSTOM"],
+                "description": "Type d'action à exécuter"
+              },
+              "actionClass": {
+                "type": "string",
+                "enum": ["Resource", "Service"],
+                "description": "Classe d'objet concernée par l'action",
+                "default": "Resource"
+              },
+              "eventStartDateTime": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Date et heure d'exécution programmée (optionnel)"
+              },
+              "params": {
+                "type": "object"
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "actionType": {
+                  "const": "CUSTOM"
+                }
+              }
+            },
+            "then": {
+              "required": ["query"],
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "description": "Requete CQL personalisée"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "query": false
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

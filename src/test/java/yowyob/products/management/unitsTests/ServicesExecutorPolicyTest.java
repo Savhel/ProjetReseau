@@ -3,14 +3,11 @@ package yowyob.products.management.unitsTests;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import yowyob.resource.management.Application;
 import yowyob.resource.management.actions.enums.ActionType;
@@ -20,7 +17,7 @@ import yowyob.resource.management.actions.service.operations.ServiceDeletionActi
 import yowyob.resource.management.actions.service.operations.ServiceReadingAction;
 import yowyob.resource.management.actions.service.operations.ServiceUpdateAction;
 import yowyob.resource.management.exceptions.policy.ExecutorPolicyViolationException;
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.models.service.enums.ServiceStatus;
 import yowyob.resource.management.repositories.service.ServiceRepository;
 import yowyob.resource.management.services.policy.executors.ServiceExecutorPolicy;
@@ -36,7 +33,7 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(classes = Application.class)
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class ServiceExecutorPolicyTest {
+class ServicesExecutorPolicyTest {
 
     @MockitoBean
     private ServiceRepository serviceRepository;
@@ -51,14 +48,14 @@ class ServiceExecutorPolicyTest {
     private ServiceExecutorPolicy serviceExecutorPolicy;
 
     private UUID entityId;
-    private Service service;
+    private Services services;
 
     @BeforeEach
     void setUp() {
         this.entityId = UUID.fromString("550e8400-b29b-41d4-a716-446655440000");
-        this.service = new Service();
-        this.service.setId(entityId);
-        this.service.setStatus(ServiceStatus.PLANNED);
+        this.services = new Services();
+        this.services.setId(entityId);
+        this.services.setStatus(ServiceStatus.PLANNED);
     }
 
     @Test
@@ -66,7 +63,7 @@ class ServiceExecutorPolicyTest {
 
         // Arrange
         when(serviceRepository.findById(entityId)).thenReturn(Optional.empty());
-        ServiceAction action = new ServiceCreationAction(service);
+        ServiceAction action = new ServiceCreationAction(services);
 
         // Act & Assert
         assertTrue(serviceExecutorPolicy.isExecutionAllowed(action));
@@ -76,9 +73,9 @@ class ServiceExecutorPolicyTest {
     void isExecutionAllowed_CreateAction_ServiceExists_ShouldNotAllow() throws ExecutorPolicyViolationException {
 
         // Arrange
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         System.out.println("is present : "+serviceRepository.findById(entityId).isPresent());
-        ServiceAction action = new ServiceCreationAction(service);
+        ServiceAction action = new ServiceCreationAction(services);
         System.out.println(serviceExecutorPolicy.isExecutionAllowed(action));
 
         // Act & Assert
@@ -90,7 +87,7 @@ class ServiceExecutorPolicyTest {
     void isExecutionAllowed_ReadAction_ServiceExists_ShouldAllow() throws ExecutorPolicyViolationException {
 
         // Arrange
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         ServiceAction action = new ServiceReadingAction(entityId);
 
         // Act & Assert
@@ -112,13 +109,13 @@ class ServiceExecutorPolicyTest {
 
         // Arrange
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.CANCELLED);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.CANCELLED);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.PLANNED, ServiceStatus.CANCELLED)).thenReturn(true);
 
         // Act & Assert
@@ -129,13 +126,13 @@ class ServiceExecutorPolicyTest {
     void isExecutionAllowed_UpdateAction_InvalidTransition_ShouldThrowException() {
         // Arrange
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.ONGOING);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.ONGOING);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.PLANNED, ServiceStatus.ONGOING)).thenReturn(false);
 
         // Act & Assert
@@ -145,7 +142,7 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_DeleteAction_ServiceExistsAndDeletionAllowed_ShouldAllow() throws ExecutorPolicyViolationException {
         // Arrange
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(statusValidator.isDeletionAllowed(ServiceStatus.PLANNED)).thenReturn(true);
         ServiceAction action = new ServiceDeletionAction(entityId);
 
@@ -168,7 +165,7 @@ class ServiceExecutorPolicyTest {
     void isExecutionAllowed_DeleteAction_ServiceExistsButDeletionNotAllowed_ShouldNotAllow() throws ExecutorPolicyViolationException {
 
         // Arrange
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(statusValidator.isDeletionAllowed(ServiceStatus.ONGOING)).thenReturn(false);
         ServiceAction action = new ServiceDeletionAction(entityId);
 
@@ -180,13 +177,13 @@ class ServiceExecutorPolicyTest {
     void isExecutionAllowed_UpdateAction_ValidTransition_FromPlannedToPublished_ShouldAllow() throws ExecutorPolicyViolationException {
         // Arrange
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.PUBLISHED);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.PUBLISHED);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.PLANNED, ServiceStatus.PUBLISHED)).thenReturn(true);
 
         // Act & Assert
@@ -196,15 +193,15 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_UpdateAction_ValidTransition_FromPublishedToPlanned_ShouldAllow() throws ExecutorPolicyViolationException {
         // Arrange
-        service.setStatus(ServiceStatus.PUBLISHED);
+        services.setStatus(ServiceStatus.PUBLISHED);
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.PLANNED);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.PLANNED);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.PUBLISHED, ServiceStatus.PLANNED)).thenReturn(true);
 
         // Act & Assert
@@ -214,15 +211,15 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_UpdateAction_ValidTransition_FromPublishedToOngoing_ShouldAllow() throws ExecutorPolicyViolationException {
         // Arrange
-        service.setStatus(ServiceStatus.PUBLISHED);
+        services.setStatus(ServiceStatus.PUBLISHED);
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.ONGOING);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.ONGOING);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.PUBLISHED, ServiceStatus.ONGOING)).thenReturn(true);
 
         // Act & Assert
@@ -232,15 +229,15 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_UpdateAction_ValidTransition_FromPublishedToCancelled_ShouldAllow() throws ExecutorPolicyViolationException {
         // Arrange
-        service.setStatus(ServiceStatus.PUBLISHED);
+        services.setStatus(ServiceStatus.PUBLISHED);
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.CANCELLED);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.CANCELLED);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.PUBLISHED, ServiceStatus.CANCELLED)).thenReturn(true);
 
         // Act & Assert
@@ -250,15 +247,15 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_UpdateAction_ValidTransition_FromOngoingToFinished_ShouldAllow() throws ExecutorPolicyViolationException {
         // Arrange
-        service.setStatus(ServiceStatus.ONGOING);
+        services.setStatus(ServiceStatus.ONGOING);
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.FINISHED);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.FINISHED);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.ONGOING, ServiceStatus.FINISHED)).thenReturn(true);
 
         // Act & Assert
@@ -268,15 +265,15 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_UpdateAction_InvalidTransition_FromOngoingToCancelled_ShouldThrowException() {
         // Arrange
-        service.setStatus(ServiceStatus.ONGOING);
+        services.setStatus(ServiceStatus.ONGOING);
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.CANCELLED);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.CANCELLED);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.ONGOING, ServiceStatus.CANCELLED)).thenReturn(false);
 
         // Act & Assert
@@ -286,15 +283,15 @@ class ServiceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_UpdateAction_InvalidTransition_FromFinishedToOngoing_ShouldThrowException() {
         // Arrange
-        service.setStatus(ServiceStatus.FINISHED);
+        services.setStatus(ServiceStatus.FINISHED);
         ServiceUpdateAction action = mock(ServiceUpdateAction.class);
-        Service updatedService = new Service();
-        updatedService.setStatus(ServiceStatus.ONGOING);
+        Services updatedServices = new Services();
+        updatedServices.setStatus(ServiceStatus.ONGOING);
 
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
-        when(action.getServiceToUpdate()).thenReturn(updatedService);
-        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(service));
+        when(action.getServicesToUpdate()).thenReturn(updatedServices);
+        when(serviceRepository.findById(entityId)).thenReturn(Optional.of(services));
         when(transitionValidator.isTransitionAllowed(ServiceStatus.FINISHED, ServiceStatus.ONGOING)).thenReturn(false);
 
         // Act & Assert

@@ -23,9 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 Ces imports concernent la journalisation (logging) et l'injection de dépendances avec Spring.
 
 ```java
-import yowyob.resource.management.actions.Action;
-import yowyob.resource.management.models.service.Service;
-import yowyob.resource.management.models.resource.Resource;
+
 // ... autres imports
 ```
 Ces imports montrent les différentes classes utilisées par `ExecutorContextManager`, notamment les actions, les modèles et les repositories.
@@ -36,7 +34,7 @@ Ces imports montrent les différentes classes utilisées par `ExecutorContextMan
 @org.springframework.stereotype.Service
 public class ExecutorContextManager {
 ```
-La classe est annotée avec `@Service`, indiquant qu'elle est un composant de service Spring qui sera automatiquement détecté et injecté.
+La classe est annotée avec `@Service`, indiquant qu'elle est un composant de services Spring qui sera automatiquement détecté et injecté.
 
 ### Attributs de la Classe
 
@@ -259,7 +257,7 @@ public class Service extends Product {
 }
 ```
 
-La classe `Service` représente un service dans l'application :
+La classe `Service` représente un services dans l'application :
 - Elle hérite également de la classe `Product`
 - Elle est annotée avec `@Table` pour le mapping avec la base de données Cassandra
 - Elle possède un identifiant unique (`id`) initialisé avec `UUID.randomUUID()`
@@ -275,7 +273,7 @@ L'application suit une architecture orientée services avec plusieurs composants
 
 Les classes de modèles représentent les entités métier de l'application :
 - `Resource` : représente une ressource avec un état et un statut
-- `Service` : représente un service avec un état et un statut
+- `Service` : représente un services avec un état et un statut
 - `Product` : classe de base pour les ressources et les services
 
 ### 2. Actions

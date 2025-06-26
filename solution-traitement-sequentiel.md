@@ -80,9 +80,9 @@ public Executor serviceActionExecutorPool() {
 
 #### application.properties
 ```properties
-# Service Action Executor Pool Settings
-app.executor.service.core-pool-size=10
-app.executor.service.max-pool-size=20
+# Services Action Executor Pool Settings
+app.executor.services.core-pool-size=10
+app.executor.services.max-pool-size=20
 
 # Resource Action Executor Pool Settings
 app.executor.resource.core-pool-size=10
@@ -102,7 +102,7 @@ app.executor.queue-capacity=1000
 ```java
 @Scheduled(fixedDelayString = "${app.executor.monitoring.log-interval:60000}")
 public void logExecutorStats() {
-    logger.info("Service Executor Stats - Active: {}, Pool Size: {}, Queue Size: {}",
+    logger.info("Services Executor Stats - Active: {}, Pool Size: {}, Queue Size: {}",
             serviceExecutor.getActiveCount(),
             serviceExecutor.getPoolSize(),
             serviceExecutor.getQueue().size());
@@ -134,8 +134,8 @@ Si 100 actions de 100ms chacune :
 
 ### Environnement de Développement
 ```properties
-app.executor.service.core-pool-size=5
-app.executor.service.max-pool-size=10
+app.executor.services.core-pool-size=5
+app.executor.services.max-pool-size=10
 app.executor.resource.core-pool-size=5
 app.executor.resource.max-pool-size=10
 app.executor.queue-capacity=500
@@ -143,8 +143,8 @@ app.executor.queue-capacity=500
 
 ### Environnement de Production
 ```properties
-app.executor.service.core-pool-size=20
-app.executor.service.max-pool-size=50
+app.executor.services.core-pool-size=20
+app.executor.services.max-pool-size=50
 app.executor.resource.core-pool-size=20
 app.executor.resource.max-pool-size=50
 app.executor.queue-capacity=2000

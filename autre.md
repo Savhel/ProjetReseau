@@ -111,6 +111,7 @@ Latence augmentée par :
 1. Files d'attente → Accumulation d'actions
 2. Kafka synchronisé → Traitement lent des messages
 3. Absence de cache → Requêtes DB répétées
+4. 
 ## 🚀 Solutions Recommandées
 1. Parallélisation : Remplacer les méthodes synchronisées par des pools de threads
 2. Async Processing : Traitement asynchrone avec CompletableFuture

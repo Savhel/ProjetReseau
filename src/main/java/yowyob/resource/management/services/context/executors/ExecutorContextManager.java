@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import yowyob.resource.management.actions.Action;
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.models.resource.Resource;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.actions.resource.ResourceAction;
@@ -68,7 +68,7 @@ public class ExecutorContextManager {
 
             case Service -> {
                 ServiceAction serviceAction = (ServiceAction) action;
-                Optional<Service> initialService = this.serviceRepository.findById(serviceAction.getEntityId());
+                Optional<Services> initialService = this.serviceRepository.findById(serviceAction.getEntityId());
 
                 yield switch (serviceAction.getActionType()) {
                     case CREATE -> new ServiceDeletionAction(serviceAction.getEntityId());

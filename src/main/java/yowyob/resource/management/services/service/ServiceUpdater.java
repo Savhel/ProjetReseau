@@ -72,7 +72,7 @@ public class ServiceUpdater implements Updater {
                     return;
                 }
 
-                logger.info("Processing Service Event for entityId: {}",
+                logger.info("Processing Services Event for entityId: {}",
                         event.getEntityId());
                 if (this.serviceUpdaterPolicy.isExecutionAllowed(event,
                         this.scheduledEvents.getOrDefault(event.getEntityId(), new ArrayList<>()))
@@ -90,7 +90,7 @@ public class ServiceUpdater implements Updater {
         eventLock.writeLock().lock();
         try {
         ServiceEvent serviceEvent = (ServiceEvent) event;
-        logger.info("Service Event scheduling for entityId: {} at {} without Policy verification",
+        logger.info("Services Event scheduling for entityId: {} at {} without Policy verification",
                 serviceEvent.getEntityId(), serviceEvent.getEventStartDateTime());
         scheduleTask(serviceEvent);
         } finally {
@@ -102,7 +102,7 @@ public class ServiceUpdater implements Updater {
         ServiceAction action = (ServiceAction) serviceEvent.getAction();
 
         Instant executionTime = serviceEvent.getEventStartDateTime().atZone(java.time.ZoneId.systemDefault()).toInstant();
-        logger.info("Scheduling task for Service Event with entityId: {} at time: {}",
+        logger.info("Scheduling task for Services Event with entityId: {} at time: {}",
                 serviceEvent.getEntityId(), executionTime);
 
         ScheduledFuture<?> future = taskScheduler.schedule(() -> executeAction(action), executionTime);
@@ -116,16 +116,16 @@ public class ServiceUpdater implements Updater {
         }
         scheduledFutures.get(serviceEvent.getEntityId()).add(new Tuple<>(serviceEvent, future));
 
-        logger.info("Successfully scheduled Task for Service Event with entityId: {} at time: {}",
+        logger.info("Successfully scheduled Task for Services Event with entityId: {} at time: {}",
                 serviceEvent.getEntityId(), executionTime);
     }
 
     private void executeAction(ServiceAction action) {
-        logger.info("Executing scheduled Service Action for entityId: {}", action.getEntityId());
+        logger.info("Executing scheduled Services Action for entityId: {}", action.getEntityId());
         this.serviceActionExecutor.executeAction(action);
         scheduledEvents.remove(action.getEntityId());
 
-        logger.info("Successfully executed scheduled Service Action for entityId: {}", action.getEntityId());
+        logger.info("Successfully executed scheduled Services Action for entityId: {}", action.getEntityId());
     }
 
     public void unscheduleEvent(Event event) {

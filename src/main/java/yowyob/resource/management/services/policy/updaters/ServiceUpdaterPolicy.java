@@ -10,7 +10,7 @@ import yowyob.resource.management.actions.service.operations.ServiceUpdateAction
 import yowyob.resource.management.events.Event;
 import yowyob.resource.management.exceptions.policy.UpdaterPolicyViolationException;
 import yowyob.resource.management.helpers.Tuple;
-import yowyob.resource.management.models.service.Service;
+import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.models.service.enums.ServiceStatus;
 import yowyob.resource.management.repositories.service.ServiceRepository;
 import yowyob.resource.management.services.interfaces.policies.UpdaterPolicy;
@@ -19,8 +19,6 @@ import yowyob.resource.management.services.policy.validators.transition.ServiceT
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 
 @Component
@@ -41,7 +39,7 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
 
     @Override
     public boolean isExecutionAllowed(Event event, List<Event> scheduledEvents) {
-        logger.info("Evaluating Service Updater policy for Event with Action : {} with entityId: {} at {}",
+        logger.info("Evaluating Services Updater policy for Event with Action : {} with entityId: {} at {}",
                 event.getAction().getActionType(), event.getEntityId(), event.getEventStartDateTime());
 
         List<Event> timeline = scheduledEvents.stream()
@@ -95,7 +93,7 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
 
                 Tuple<ServiceStatus, Event> nextStatus = this.getNextStatus(event, timeline);
                 Tuple<ServiceStatus, Event> previousStatus = this.getPreviousStatus(event, timeline);
-                ServiceStatus statusToUpdate = ((ServiceUpdateAction) event.getAction()).getServiceToUpdate().getStatus();
+                ServiceStatus statusToUpdate = ((ServiceUpdateAction) event.getAction()).getServicesToUpdate().getStatus();
 
                 if (!this.transitionValidator.isTransitionAllowed(previousStatus.getFirst(), statusToUpdate)) {
                     if (previousStatus.getSecond() == null) {
@@ -158,8 +156,8 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
     private Tuple<ServiceStatus, Event> getPreviousStatus(Event event, List<Event> timeline) {
         Event previousUpdateEvent = this.getPreviousEventByActionType(event, timeline, ActionType.UPDATE);
         if (previousUpdateEvent == null) {
-            Service currentService = this.serviceRepository.findById(event.getEntityId()).orElse(null);
-            if (currentService == null) {
+            Services currentServices = this.serviceRepository.findById(event.getEntityId()).orElse(null);
+            if (currentServices == null) {
                 Event creationEvent = this.getPreviousEventByActionType(event, timeline, ActionType.CREATE);
                 if (creationEvent == null) {
                     throw new UpdaterPolicyViolationException(event,
@@ -181,30 +179,30 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
                                             deletionEvent.getEventStartDateTime())
                             );
                         } else {
-                            ServiceStatus previousStatus = ((ServiceUpdateAction) creationEvent.getAction()).getServiceToUpdate().getStatus();
+                            ServiceStatus previousStatus = ((ServiceUpdateAction) creationEvent.getAction()).getServicesToUpdate().getStatus();
                             return new Tuple<>(previousStatus, creationEvent);
                         }
                     } else {
-                        ServiceStatus previousStatus = ((ServiceUpdateAction) creationEvent.getAction()).getServiceToUpdate().getStatus();
+                        ServiceStatus previousStatus = ((ServiceUpdateAction) creationEvent.getAction()).getServicesToUpdate().getStatus();
                         return new Tuple<>(previousStatus, creationEvent);
                     }
                 }
             } else {
-                return new Tuple<>(currentService.getStatus(), null);
+                return new Tuple<>(currentServices.getStatus(), null);
             }
         } else {
-            ServiceStatus previousStatus = ((ServiceUpdateAction) previousUpdateEvent.getAction()).getServiceToUpdate().getStatus();
+            ServiceStatus previousStatus = ((ServiceUpdateAction) previousUpdateEvent.getAction()).getServicesToUpdate().getStatus();
             return new Tuple<>(previousStatus, previousUpdateEvent);
         }
     }
 
     private Tuple<ServiceStatus, Event> getNextStatus(Event event, List<Event> timeline) {
-        ServiceStatus statusToUpdate = ((ServiceUpdateAction) event.getAction()).getServiceToUpdate().getStatus();
+        ServiceStatus statusToUpdate = ((ServiceUpdateAction) event.getAction()).getServicesToUpdate().getStatus();
         Event nextUpdateEvent = this.getNextEventByActionType(event, timeline, ActionType.UPDATE);
         if (nextUpdateEvent == null) {
             return new Tuple<>(statusToUpdate, event);
         } else {
-            ServiceStatus nextStatus = ((ServiceUpdateAction) nextUpdateEvent.getAction()).getServiceToUpdate().getStatus();
+            ServiceStatus nextStatus = ((ServiceUpdateAction) nextUpdateEvent.getAction()).getServicesToUpdate().getStatus();
             return new Tuple<>(nextStatus, nextUpdateEvent);
         }
     }
