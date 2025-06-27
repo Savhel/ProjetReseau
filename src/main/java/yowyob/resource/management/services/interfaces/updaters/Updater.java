@@ -8,7 +8,7 @@ import yowyob.resource.management.exceptions.policy.UpdaterPolicyViolationExcept
 
 
 public interface Updater {
-    void pause();
-    void resume();
+    Mono<Void> pause();
+    Mono<Void> resume();
     Mono<Void> handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException;
 }

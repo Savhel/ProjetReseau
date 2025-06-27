@@ -8,7 +8,7 @@ import yowyob.resource.management.actions.enums.ActionClass;
 
 
 public abstract class ServiceAction extends Action {
-    public ServiceAction(UUID entityId, ActionType actionType) {
+    public ServiceAction(UUID entityId, ActionType actionType, ActionClass service) {
         super(entityId, actionType, ActionClass.Service);
     }
 }

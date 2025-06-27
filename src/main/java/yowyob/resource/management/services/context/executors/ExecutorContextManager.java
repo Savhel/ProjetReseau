@@ -4,7 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import org.springframework.cache.annotation.Cacheable;
+import java.time.Duration;
+import yowyob.resource.management.services.cache.ReactiveCacheService;
 import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.models.service.Services;
@@ -32,16 +33,21 @@ public class ExecutorContextManager {
     private final ResourceActionExecutor resourceActionExecutor;
     private final ServiceRepository serviceRepository;
     private final ResourceRepository resourceRepository;
+    private final ReactiveCacheService reactiveCacheService;
 
     private static final Logger logger = LoggerFactory.getLogger(ExecutorContextManager.class);
+    private static final Duration REVERSE_ACTION_TTL = Duration.ofMinutes(30);
+    private static final String REVERSE_ACTION_PREFIX = "reverse-actions";
 
     @Autowired
     public ExecutorContextManager(ServiceActionExecutor serviceActionExecutor, ResourceActionExecutor resourceActionExecutor,
-                                  ServiceRepository serviceRepository, ResourceRepository resourceRepository) {
+                                  ServiceRepository serviceRepository, ResourceRepository resourceRepository,
+                                  ReactiveCacheService reactiveCacheService) {
         this.serviceActionExecutor = serviceActionExecutor;
         this.resourceActionExecutor = resourceActionExecutor;
         this.serviceRepository = serviceRepository;
         this.resourceRepository = resourceRepository;
+        this.reactiveCacheService = reactiveCacheService;
     }
     
     public void init() {
@@ -54,8 +60,18 @@ public class ExecutorContextManager {
         logger.info("Context has been successfully cleared");
     }
 
-    @Cacheable("reverse-actions")
     public Mono<Action> generateReverseAction(Action action) {
+        String cacheKey = reactiveCacheService.generateKey(REVERSE_ACTION_PREFIX, action.getEntityId(), action.getActionType());
+        
+        return reactiveCacheService.getOrCompute(
+            cacheKey,
+            computeReverseAction(action),
+            REVERSE_ACTION_TTL,
+            Action.class
+        );
+    }
+    
+    private Mono<Action> computeReverseAction(Action action) {
         return switch (action.getActionClass()) {
             case Resource -> {
                 ResourceAction resourceAction = (ResourceAction) action;

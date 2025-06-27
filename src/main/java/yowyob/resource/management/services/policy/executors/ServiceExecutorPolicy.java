@@ -5,7 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
+import java.time.Duration;
+import yowyob.resource.management.services.cache.ReactiveCacheService;
 
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.actions.service.operations.ServiceUpdateAction;
@@ -24,19 +25,30 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
     private final ServiceRepository serviceRepository;
     private final ServiceTransitionValidator transitionValidator;
     private final ServiceStatusBasedOperationValidator statusValidator;
+    private final ReactiveCacheService reactiveCacheService;
     private final static Logger logger = LoggerFactory.getLogger(ServiceExecutorPolicy.class);
+    
+    private static final Duration POLICY_VALIDATION_TTL = Duration.ofMinutes(10);
+    private static final String POLICY_VALIDATION_PREFIX = "policy-validations:service";
 
-    @Cacheable(value = "policy-validations", key = "'service-' + #action.entityId + '-' + #action.actionType")
     public Mono<Boolean> validateActionPolicy(Action action) {
+        String cacheKey = reactiveCacheService.generateKey(POLICY_VALIDATION_PREFIX, action.getEntityId(), action.getActionType());
         logger.debug("Validating policy for action: {} with entityId: {}", action.getActionType(), action.getEntityId());
-        return isExecutionAllowed(action);
+        
+        return reactiveCacheService.getOrCompute(
+            cacheKey,
+            isExecutionAllowed(action),
+            POLICY_VALIDATION_TTL,
+            Boolean.class
+        );
     }
 
     @Autowired
-    public ServiceExecutorPolicy(ServiceRepository serviceRepository, ServiceTransitionValidator transitionValidator, ServiceStatusBasedOperationValidator statusValidator) {
+    public ServiceExecutorPolicy(ServiceRepository serviceRepository, ServiceTransitionValidator transitionValidator, ServiceStatusBasedOperationValidator statusValidator, ReactiveCacheService reactiveCacheService) {
         this.serviceRepository = serviceRepository;
         this.transitionValidator = transitionValidator;
         this.statusValidator = statusValidator;
+        this.reactiveCacheService = reactiveCacheService;
     }
 
     @Override
@@ -64,7 +76,7 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
                 yield this.serviceRepository.findById(serviceAction.getEntityId())
                         .switchIfEmpty(Mono.error(new ExecutorPolicyViolationException(action, "Service not found")))
                         .flatMap(currentService -> {
-                            ServiceStatus targetStatus = serviceUpdateAction.getServiceToUpdate().getStatus();
+                            ServiceStatus targetStatus = serviceUpdateAction.getServicesToUpdate().getStatus();
                             ServiceStatus currentStatus = currentService.getStatus();
                             
                             if (!this.transitionValidator.isTransitionAllowed(currentStatus, targetStatus)) {

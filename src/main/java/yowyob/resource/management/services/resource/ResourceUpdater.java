@@ -56,7 +56,7 @@ public class ResourceUpdater implements Updater {
 
     @Override
     @EventListener
-    public void handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+    public Mono<Void> handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
         eventLock.writeLock().lock();
         try {
         if (event != null) {
@@ -69,7 +69,7 @@ public class ResourceUpdater implements Updater {
                             event.getEventClass(),
                             event.getEntityId(),
                             event.getEventStartDateTime());
-                    return;
+                    return null;
                 }
 
                 ResourceEvent resourceEvent = (ResourceEvent) event;
@@ -91,9 +91,10 @@ public class ResourceUpdater implements Updater {
         } finally {
             eventLock.writeLock().unlock();
         }
+        return Mono.empty();
     }
 
-    public void forceEventScheduling(Event event) {
+    public Mono<Void> forceEventScheduling(Event event) {
         eventLock.writeLock().lock();
         try {
         ResourceEvent resourceEvent = (ResourceEvent) event;
@@ -103,9 +104,10 @@ public class ResourceUpdater implements Updater {
         } finally {
             eventLock.writeLock().unlock();
         }
+        return Mono.empty();
     }
 
-    private void scheduleTask(ResourceEvent resourceEvent) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+    private Mono<Void> scheduleTask(ResourceEvent resourceEvent) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
         ResourceAction action = (ResourceAction) resourceEvent.getAction();
 
         Instant executionTime = resourceEvent.getEventStartDateTime().atZone(java.time.ZoneId.systemDefault()).toInstant();
@@ -125,6 +127,7 @@ public class ResourceUpdater implements Updater {
 
         logger.info("Successfully scheduled Task for Resource Event with entityId: {} at time: {}",
                 resourceEvent.getEntityId(), executionTime);
+        return Mono.empty();
     }
 
     private void executeAction(ResourceAction action) {
@@ -141,7 +144,7 @@ public class ResourceUpdater implements Updater {
                 .subscribe();
     }
 
-    public void unscheduleEvent(Event event) {
+    public Mono<Void> unscheduleEvent(Event event) {
         eventLock.writeLock().lock();
         try {
         if (event instanceof ResourceEvent resourceEvent) {
@@ -177,19 +180,21 @@ public class ResourceUpdater implements Updater {
         } finally {
             eventLock.writeLock().unlock();
         }
+        return Mono.empty();
     }
 
     @Override
-    public void pause() {
+    public Mono<Void> pause() {
         paused.set(true);
         logger.warn("ResourceUpdater is now PAUSED. New events will wait until resume() is called.");
+        return Mono.empty();
     }
 
     @Override
-    public void resume() {
+    public Mono<Void> resume() {
         if (!paused.get()) {
             logger.info("ResourceUpdater is already running.");
-            return;
+            return Mono.empty();
         }
 
         logger.info("ResourceUpdater is processing queued events before resuming...");
@@ -199,5 +204,6 @@ public class ResourceUpdater implements Updater {
         }
         paused.set(false);
         logger.info("All waiting events have been processed. ResourceUpdater is now RESUMED.");
+        return Mono.empty();
     }
 }

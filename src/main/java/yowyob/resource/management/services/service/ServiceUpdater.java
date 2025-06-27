@@ -185,16 +185,17 @@ public class ServiceUpdater implements Updater {
     }
 
     @Override
-    public void pause() {
+    public Mono<Void> pause() {
         paused.set(true);
         logger.warn("ServiceUpdater is now PAUSED. New events will wait until resume() is called.");
+        return null;
     }
 
     @Override
-    public void resume() {
+    public Mono<Void> resume() {
         if (!paused.get()) {
             logger.info("ServiceUpdater is already running.");
-            return;
+            return null;
         }
 
         logger.info("ServiceUpdater is processing queued events before resuming...");
@@ -204,5 +205,6 @@ public class ServiceUpdater implements Updater {
         }
         paused.set(false);
         logger.info("All waiting events have been processed. ServiceUpdater is now RESUMED.");
+        return null;
     }
 }

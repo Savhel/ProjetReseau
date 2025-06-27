@@ -6,9 +6,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.time.Duration;
@@ -35,13 +39,31 @@ public class RedisConfig {
     }
 
     @Bean
+    public ReactiveRedisTemplate<String, Object> reactiveRedisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisSerializationContext<String, Object> serializationContext = RedisSerializationContext
+                .<String, Object>newSerializationContext(new StringRedisSerializer())
+                .key(new StringRedisSerializer())
+                .value(new GenericJackson2JsonRedisSerializer())
+                .hashKey(new StringRedisSerializer())
+                .hashValue(new GenericJackson2JsonRedisSerializer())
+                .build();
+
+        return new ReactiveRedisTemplate<>((ReactiveRedisConnectionFactory) connectionFactory, serializationContext);
+    }
+
+    @Bean
+    public ReactiveStringRedisTemplate reactiveStringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        return new ReactiveStringRedisTemplate((ReactiveRedisConnectionFactory) connectionFactory);
+    }
+
+    @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         // Configuration par défaut
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(5))
-                .serializeKeysWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
+                .serializeKeysWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new GenericJackson2JsonRedisSerializer()))
                 .disableCachingNullValues();
 

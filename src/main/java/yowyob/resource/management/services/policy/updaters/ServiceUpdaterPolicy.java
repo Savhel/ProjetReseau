@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.enums.ActionClass;
 import yowyob.resource.management.actions.enums.ActionType;
+import yowyob.resource.management.actions.service.operations.ServiceCreationAction;
 import yowyob.resource.management.actions.service.operations.ServiceUpdateAction;
 import yowyob.resource.management.events.Event;
 import yowyob.resource.management.exceptions.policy.UpdaterPolicyViolationException;
@@ -49,7 +50,8 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
                 .toList();
 
         Event eventBefore = this.getEventBefore(event, timeline);
-        return switch (event.getAction().getActionType()) {
+
+        Mono<Boolean> decisionMono = switch (event.getAction().getActionType()) {
             case CREATE -> {
                 if (eventBefore != null && eventBefore.getAction().getActionType() != ActionType.DELETE) {
                     yield Mono.error(new UpdaterPolicyViolationException(event,
@@ -62,7 +64,7 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
                         .flatMap(exists -> {
                             if (exists) {
                                 return Mono.error(new UpdaterPolicyViolationException(event,
-                                        "Cannot schedule a service CREATE action because the specified service will already exists in the database."
+                                        "Cannot schedule a service CREATE action because the specified service already exists in the database."
                                 ));
                             }
                             return Mono.just(true);
@@ -81,7 +83,8 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
                         .flatMap(exists -> {
                             if (!exists) {
                                 return Mono.error(new UpdaterPolicyViolationException(event,
-                                        "Cannot schedule a service READ action at %s because the specified service will not exists in the database."
+                                        String.format("Cannot schedule a service READ action at %s because the specified service does not exist in the database.",
+                                                event.getEventStartDateTime())
                                 ));
                             }
                             return Mono.just(true);
@@ -122,6 +125,7 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
                                     ));
                                 }
                             }
+
                             if (!this.transitionValidator.isTransitionAllowed(statusToUpdate, nextStatus.getFirst())) {
                                 return Mono.error(new UpdaterPolicyViolationException(
                                         event,
@@ -146,7 +150,7 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
                                         currentStatus.getSecond(),
                                         String.format("Cannot delete service %s: Current status %s does not allow deletion.",
                                                 event.getEntityId(),
-                                                currentStatus)
+                                                currentStatus.getFirst())
                                 ));
                             }
                             return Mono.just(true);
@@ -154,7 +158,9 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
             }
 
             default -> Mono.just(false);
-        }.doOnSuccess(decision -> 
+        };
+
+        return decisionMono.doOnSuccess(decision ->
                 logger.info("Updater policy decision for Event with Action: {} with entityId: {} at {} is: {}",
                         event.getAction().getActionType(), event.getEntityId(), event.getEventStartDateTime(), decision ? "ALLOWED" : "FORBIDDEN")
         );
@@ -162,44 +168,42 @@ public class ServiceUpdaterPolicy implements UpdaterPolicy {
 
     private Mono<Tuple<ServiceStatus, Event>> getPreviousStatusReactive(Event event, List<Event> timeline) {
         Event previousUpdateEvent = this.getPreviousEventByActionType(event, timeline, ActionType.UPDATE);
-        if (previousUpdateEvent == null) {
-            return serviceRepository.findById(event.getEntityId())
-                    .map(currentServices -> new Tuple<>(currentServices.getStatus(), (Event) null))
-                    .switchIfEmpty(Mono.defer(() -> {
-                        Event creationEvent = this.getPreviousEventByActionType(event, timeline, ActionType.CREATE);
-                        if (creationEvent == null) {
-                            return Mono.error(new UpdaterPolicyViolationException(event,
-                                    String.format("Cannot get previous status for service %s: " +
-                                                    "The service does not exist in the database and no creation event was found in the timeline.",
-                                            event.getEntityId())
-                            ));
-                        } else {
-                            Event deletionEvent = this.getPreviousEventByActionType(event, timeline, ActionType.DELETE);
-                            if (deletionEvent != null) {
-                                if (deletionEvent.getEventStartDateTime().isAfter(creationEvent.getEventStartDateTime())) {
-                                    return Mono.error(new UpdaterPolicyViolationException(event,
-                                            deletionEvent,
-                                            String.format("Cannot get previous status for service %s: " +
-                                                            "Invalid timeline detected - found creation event at %s but it's followed by a deletion at %s. " +
-                                                            "Deletion must come before creation to determine previous status.",
-                                                    event.getEntityId(),
-                                                    creationEvent.getEventStartDateTime(),
-                                                    deletionEvent.getEventStartDateTime())
-                                    ));
-                                } else {
-                                    ServiceStatus previousStatus = ((ServiceUpdateAction) creationEvent.getAction()).getServicesToUpdate().getStatus();
-                                    return Mono.just(new Tuple<>(previousStatus, creationEvent));
-                                }
-                            } else {
-                                ServiceStatus previousStatus = ((ServiceUpdateAction) creationEvent.getAction()).getServicesToUpdate().getStatus();
-                                return Mono.just(new Tuple<>(previousStatus, creationEvent));
-                            }
-                        }
-                    }));
-        } else {
+
+        if (previousUpdateEvent != null) {
             ServiceStatus previousStatus = ((ServiceUpdateAction) previousUpdateEvent.getAction()).getServicesToUpdate().getStatus();
             return Mono.just(new Tuple<>(previousStatus, previousUpdateEvent));
         }
+
+        return serviceRepository.findById(event.getEntityId())
+                .map(currentService -> new Tuple<>(currentService.getStatus(), (Event) null))
+                .switchIfEmpty(Mono.<Tuple<ServiceStatus, Event>>defer(() -> {
+                    Event creationEvent = this.getPreviousEventByActionType(event, timeline, ActionType.CREATE);
+                    if (creationEvent == null) {
+                        return Mono.error(new UpdaterPolicyViolationException(event,
+                                String.format("Cannot get previous status for service %s: " +
+                                                "The service does not exist in the database and no creation event was found in the timeline.",
+                                        event.getEntityId())
+                        ));
+                    }
+
+                    Event deletionEvent = this.getPreviousEventByActionType(event, timeline, ActionType.DELETE);
+                    if (deletionEvent != null &&
+                            deletionEvent.getEventStartDateTime().isAfter(creationEvent.getEventStartDateTime())) {
+                        return Mono.error(new UpdaterPolicyViolationException(event,
+                                deletionEvent,
+                                String.format("Cannot get previous status for service %s: " +
+                                                "Invalid timeline detected - found creation event at %s but it's followed by a deletion at %s.",
+                                        event.getEntityId(),
+                                        creationEvent.getEventStartDateTime(),
+                                        deletionEvent.getEventStartDateTime())
+                        ));
+                    }
+
+                    ServiceStatus previousStatus = ((ServiceCreationAction) creationEvent.getAction())
+                            .getServiceToSave()
+                            .getStatus();
+                    return Mono.just(new Tuple<>(previousStatus, creationEvent));
+                }));
     }
 
     private Tuple<ServiceStatus, Event> getPreviousStatus(Event event, List<Event> timeline) {

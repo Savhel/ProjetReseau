@@ -8,7 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import reactor.core.publisher.Mono;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +22,7 @@ public class RedisCacheMetrics {
     
     private final MeterRegistry meterRegistry;
     private final CacheManager cacheManager;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final ReactiveRedisTemplate<String, Object> reactiveRedisTemplate;
     
     private final Counter cacheHitCounter;
     private final Counter cacheMissCounter;
@@ -30,10 +31,10 @@ public class RedisCacheMetrics {
     @Autowired
     public RedisCacheMetrics(MeterRegistry meterRegistry, 
                            CacheManager cacheManager,
-                           RedisTemplate<String, Object> redisTemplate) {
+                           ReactiveRedisTemplate<String, Object> reactiveRedisTemplate) {
         this.meterRegistry = meterRegistry;
         this.cacheManager = cacheManager;
-        this.redisTemplate = redisTemplate;
+        this.reactiveRedisTemplate = reactiveRedisTemplate;
         
         // Initialisation des métriques
         this.cacheHitCounter = Counter.builder("cache.hits")
@@ -81,35 +82,35 @@ public class RedisCacheMetrics {
     }
 
     @Scheduled(fixedRate = 60000) // Toutes les minutes
-    public void reportCacheStatistics() {
+    public Mono<Void> reportCacheStatistics() {
         try {
             logger.info("=== Redis Cache Statistics ===");
-            
-            // Statistiques par cache
+
+            // Statistiques par cache (synchrone)
             cacheManager.getCacheNames().forEach(cacheName -> {
                 Cache cache = cacheManager.getCache(cacheName);
                 if (cache != null) {
                     logger.info("Cache '{}' - Active", cacheName);
                 }
             });
-            
-            // Statistiques Redis générales
-            try {
-                Long dbSize = redisTemplate.getConnectionFactory()
-                    .getConnection()
-                    .dbSize();
-                logger.info("Redis DB Size: {} keys", dbSize);
-                
-                // Enregistrer la métrique
-                meterRegistry.gauge("redis.db.size", dbSize);
-                
-            } catch (Exception e) {
-                logger.warn("Could not retrieve Redis statistics: {}", e.getMessage());
-            }
-            
+
+            // Statistiques Redis générales (réactive)
+            reactiveRedisTemplate.execute(connection -> connection.serverCommands().dbSize())
+                    .next()  // prend le premier élément en Mono
+                    .doOnSuccess(dbSize -> {
+                        logger.info("Redis DB Size: {} keys", dbSize);
+                        meterRegistry.gauge("redis.db.size", dbSize);
+                    })
+                    .doOnError(error -> logger.warn("Could not retrieve Redis statistics: {}", error.getMessage()))
+                    .onErrorReturn(0L)
+                    .subscribe();
+
+
         } catch (Exception e) {
             logger.error("Error reporting cache statistics", e);
+            return Mono.empty();
         }
+        return Mono.empty();
     }
 
     @Scheduled(fixedRate = 300000) // Toutes les 5 minutes
