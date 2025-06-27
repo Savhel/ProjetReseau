@@ -1,7 +1,6 @@
 package yowyob.resource.management.services.policy.executors;
 
-import java.util.Optional;
-
+import reactor.core.publisher.Mono;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,7 +27,7 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
     private final static Logger logger = LoggerFactory.getLogger(ServiceExecutorPolicy.class);
 
     @Cacheable(value = "policy-validations", key = "'service-' + #action.entityId + '-' + #action.actionType")
-    public boolean validateActionPolicy(Action action) {
+    public Mono<Boolean> validateActionPolicy(Action action) {
         logger.debug("Validating policy for action: {} with entityId: {}", action.getActionType(), action.getEntityId());
         return isExecutionAllowed(action);
     }
@@ -41,56 +40,53 @@ public class ServiceExecutorPolicy implements ExecutorPolicy {
     }
 
     @Override
-    public boolean isExecutionAllowed(Action action) throws ExecutorPolicyViolationException {
+    public Mono<Boolean> isExecutionAllowed(Action action) {
         logger.info("Evaluating execution policy for Action: {} with entityId: {}",
                 action.getActionType(), action.getEntityId());
 
         ServiceAction serviceAction = (ServiceAction) action;
 
-        boolean decision = switch (serviceAction.getActionType()) {
-            case CREATE -> {
-                Optional<Services> service = this.serviceRepository.findById(serviceAction.getEntityId());
-                yield service.isEmpty();
-            }
+        return switch (serviceAction.getActionType()) {
+            case CREATE -> this.serviceRepository.findById(serviceAction.getEntityId())
+                    .map(service -> false) // Service exists, creation not allowed
+                    .defaultIfEmpty(true) // Service doesn't exist, creation allowed
+                    .doOnSuccess(decision -> logger.info("CREATE decision for entityId={}: {}", 
+                            serviceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
 
-            case READ -> {
-                Optional<Services> service = this.serviceRepository.findById(serviceAction.getEntityId());
-                yield service.isPresent();
-            }
+            case READ -> this.serviceRepository.findById(serviceAction.getEntityId())
+                    .map(service -> true) // Service exists, read allowed
+                    .defaultIfEmpty(false) // Service doesn't exist, read not allowed
+                    .doOnSuccess(decision -> logger.info("READ decision for entityId={}: {}", 
+                            serviceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
 
             case UPDATE -> {
                 ServiceUpdateAction serviceUpdateAction = (ServiceUpdateAction) serviceAction;
-                Optional<Services> currentService = serviceRepository.findById(serviceAction.getEntityId());
-
-                if (currentService.isEmpty()) {
-                    throw new ExecutorPolicyViolationException(action, "Service not found");
-                }
-
-                ServiceStatus targetStatus = serviceUpdateAction.getServicesToUpdate().getStatus();
-                ServiceStatus currentStatus = currentService.get().getStatus();
-                if (!this.transitionValidator.isTransitionAllowed(currentStatus, targetStatus)) {
-                    throw new ExecutorPolicyViolationException(action,
-                            String.format("Invalid status transition from %s to %s", currentStatus, targetStatus));
-                }
-
-                yield true;
+                yield this.serviceRepository.findById(serviceAction.getEntityId())
+                        .switchIfEmpty(Mono.error(new ExecutorPolicyViolationException(action, "Service not found")))
+                        .flatMap(currentService -> {
+                            ServiceStatus targetStatus = serviceUpdateAction.getServiceToUpdate().getStatus();
+                            ServiceStatus currentStatus = currentService.getStatus();
+                            
+                            if (!this.transitionValidator.isTransitionAllowed(currentStatus, targetStatus)) {
+                                return Mono.error(new ExecutorPolicyViolationException(action,
+                                        String.format("Invalid status transition from %s to %s", currentStatus, targetStatus)));
+                            }
+                            
+                            return Mono.just(true);
+                        })
+                        .doOnSuccess(decision -> logger.info("UPDATE decision for entityId={}: {}", 
+                                serviceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
             }
 
-            case DELETE -> {
-                Optional<Services> currentService = serviceRepository.findById(serviceAction.getEntityId());
-                if (currentService.isEmpty()) {
-                    throw new ExecutorPolicyViolationException(action, "Service not found.");
-                }
+            case DELETE -> this.serviceRepository.findById(serviceAction.getEntityId())
+                    .switchIfEmpty(Mono.error(new ExecutorPolicyViolationException(action, "Service not found.")))
+                    .map(currentService -> this.statusValidator.isDeletionAllowed(currentService.getStatus()))
+                    .doOnSuccess(decision -> logger.info("DELETE decision for entityId={}: {}", 
+                            serviceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
 
-                yield this.statusValidator.isDeletionAllowed(currentService.get().getStatus());
-            }
-
-            default -> false;
+            default -> Mono.just(false)
+                    .doOnSuccess(decision -> logger.info("DEFAULT decision for entityId={}: FORBIDDEN", 
+                            serviceAction.getEntityId()));
         };
-
-        logger.info("Execution policy decision for Action: {} with entityId: {} is: {}",
-                serviceAction.getActionType(), serviceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN");
-
-        return decision;
     }
 }

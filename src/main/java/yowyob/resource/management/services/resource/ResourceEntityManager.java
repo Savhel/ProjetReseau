@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.annotation.Autowired;
+import reactor.core.publisher.Mono;
 
 import yowyob.resource.management.events.resource.ResourceEvent;
 import yowyob.resource.management.actions.resource.ResourceAction;
@@ -25,14 +26,14 @@ public class ResourceEntityManager {
         this.resourceActionExecutor = resourceActionExecutor;
     }
 
-    public void triggerResourceEvent(ResourceAction action, LocalDateTime eventStartDateTime) {
+    public Mono<Void> triggerResourceEvent(ResourceAction action, LocalDateTime eventStartDateTime) {
         logger.info("Triggering Resource Event for entityId: {} with action: {} at: {}",
                 action.getEntityId(), action.getActionType(), eventStartDateTime);
 
-        eventPublisher.publishEvent(new ResourceEvent(this, action, eventStartDateTime));
+        return Mono.fromRunnable(() -> eventPublisher.publishEvent(new ResourceEvent(this, action, eventStartDateTime)));
     }
 
-    public Optional<?> executeAction(ResourceAction resourceAction) {
+    public Mono<?> executeAction(ResourceAction resourceAction) {
         logger.info("Received Action      : Type={}, entityId={}",
                 resourceAction.getActionType(), resourceAction.getEntityId());
 

@@ -4,15 +4,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.actions.resource.ResourceAction;
-import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.exceptions.policy.ExecutorPolicyViolationException;
 import yowyob.resource.management.repositories.resource.ResourceRepository;
 import yowyob.resource.management.services.interfaces.executors.Executor;
 import yowyob.resource.management.services.policy.executors.ResourceExecutorPolicy;
 
-import java.util.Optional;
+
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -40,43 +40,44 @@ public class ResourceActionExecutor implements Executor {
     }
 
     @Override
-    public Optional<?> executeAction(Action action) throws ExecutorPolicyViolationException {
+    public Mono<?> executeAction(Action action) {
         if (paused.get()) {
             waitingActions.add(action);
             logger.warn("ResourceActionExecutor is paused. Action of Type={} with entityId={} has been queued.",
                     action.getActionClass(),
                     action.getEntityId());
-            return Optional.empty();
+            return Mono.empty();
         }
 
         logger.info("Executing Resource Action: Type={} for entityId={}",
                 action.getActionType(), action.getEntityId());
 
-        if (!this.resourceExecutorPolicy.isExecutionAllowed(action)) {
-            throw new ExecutorPolicyViolationException(action,
-                    "Execution of the specified resource action is not allowed by policy");
-        }
-
-        Optional<?> result = action.execute(this.resourceRepository);
-        logger.info("Action execution completed for Action: Type={} with entityId={}",
-                action.getActionType(), action.getEntityId());
-
-        return result;
-
+        return this.resourceExecutorPolicy.isExecutionAllowed(action)
+                .flatMap(isAllowed -> {
+                    if (!isAllowed) {
+                        return Mono.error(new ExecutorPolicyViolationException(action,
+                                "Execution of the specified resource action is not allowed by policy"));
+                    }
+                    
+                    return action.execute(this.resourceRepository)
+                            .doOnSuccess(result -> logger.info("Action execution completed for Action: Type={} with entityId={}",
+                                    action.getActionType(), action.getEntityId()))
+                            .doOnError(error -> logger.error("Action execution failed for Action: Type={} with entityId={}: {}",
+                                    action.getActionType(), action.getEntityId(), error.getMessage()));
+                });
     }
 
-    public Optional<?> forceActionExecution(Action action) {
+    public Mono<?> forceActionExecution(Action action) {
         logger.warn("Action execution of {} for entityId: {} without Policy verification",
                 action.getActionType(), action.getEntityId());
         return executeResourceAction(action);
     }
 
-    private Optional<?> executeResourceAction(Action action) {
+    private Mono<?> executeResourceAction(Action action) {
         ResourceAction resourceAction = (ResourceAction) action;
-        Optional<?> result = resourceAction.execute(this.resourceRepository);
-        logger.info("Action execution completed for Action: {} with entityId: {}",
-                resourceAction.getActionType(), resourceAction.getEntityId());
-        return result;
+        return resourceAction.execute(this.resourceRepository)
+                .doOnSuccess(result -> logger.info("Action execution completed for Action: {} with entityId: {}",
+                        resourceAction.getActionType(), resourceAction.getEntityId()));
     }
 
     @Override
@@ -102,7 +103,7 @@ public class ResourceActionExecutor implements Executor {
             Action action = this.waitingActions.poll();
             futures[index++] = CompletableFuture.runAsync(() -> {
                 try {
-                    executeResourceAction(action);
+                    executeResourceAction(action).block();
                 } catch (Exception e) {
                     logger.error("Error executing queued action: {}", e.getMessage(), e);
                 }

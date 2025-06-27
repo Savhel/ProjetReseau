@@ -1,7 +1,6 @@
 package yowyob.resource.management.services.policy.executors;
 
-import java.util.Optional;
-
+import reactor.core.publisher.Mono;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -34,56 +33,53 @@ public class ResourceExecutorPolicy implements ExecutorPolicy {
     }
 
     @Override
-    public boolean isExecutionAllowed(Action action) throws ExecutorPolicyViolationException {
+    public Mono<Boolean> isExecutionAllowed(Action action) {
         logger.info("Evaluating execution policy for Action: Type={}, entityId={}",
                 action.getActionType(), action.getEntityId());
 
         ResourceAction resourceAction = (ResourceAction) action;
 
-        boolean decision = switch (resourceAction.getActionType()) {
-            case CREATE -> {
-                Optional<Resource> resource = this.resourceRepository.findById(resourceAction.getEntityId());
-                yield resource.isEmpty();
-            }
+        return switch (resourceAction.getActionType()) {
+            case CREATE -> this.resourceRepository.findById(resourceAction.getEntityId())
+                    .map(resource -> false) // Resource exists, creation not allowed
+                    .defaultIfEmpty(true) // Resource doesn't exist, creation allowed
+                    .doOnSuccess(decision -> logger.info("CREATE decision for entityId={}: {}", 
+                            resourceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
 
-            case READ -> {
-                Optional<Resource> resource = this.resourceRepository.findById(resourceAction.getEntityId());
-                yield resource.isPresent();
-            }
+            case READ -> this.resourceRepository.findById(resourceAction.getEntityId())
+                    .map(resource -> true) // Resource exists, read allowed
+                    .defaultIfEmpty(false) // Resource doesn't exist, read not allowed
+                    .doOnSuccess(decision -> logger.info("READ decision for entityId={}: {}", 
+                            resourceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
 
             case UPDATE -> {
                 ResourceUpdateAction resourceUpdateAction = (ResourceUpdateAction) resourceAction;
-                Optional<Resource> currentResource = resourceRepository.findById(resourceAction.getEntityId());
-
-                if (currentResource.isEmpty()) {
-                    throw new ExecutorPolicyViolationException(action, "Resource not found");
-                }
-
-                ResourceStatus targetStatus = resourceUpdateAction.getResourceToUpdate().getStatus();
-                ResourceStatus currentStatus = currentResource.get().getStatus();
-                if (!this.transitionValidator.isTransitionAllowed(currentStatus, targetStatus)) {
-                    throw new ExecutorPolicyViolationException(action,
-                            String.format("Invalid status transition from %s to %s", currentStatus, targetStatus));
-                }
-
-                yield true;
+                yield this.resourceRepository.findById(resourceAction.getEntityId())
+                        .switchIfEmpty(Mono.error(new ExecutorPolicyViolationException(action, "Resource not found")))
+                        .flatMap(currentResource -> {
+                            ResourceStatus targetStatus = resourceUpdateAction.getResourceToUpdate().getStatus();
+                            ResourceStatus currentStatus = currentResource.getStatus();
+                            
+                            if (!this.transitionValidator.isTransitionAllowed(currentStatus, targetStatus)) {
+                                return Mono.error(new ExecutorPolicyViolationException(action,
+                                        String.format("Invalid status transition from %s to %s", currentStatus, targetStatus)));
+                            }
+                            
+                            return Mono.just(true);
+                        })
+                        .doOnSuccess(decision -> logger.info("UPDATE decision for entityId={}: {}", 
+                                resourceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
             }
 
-            case DELETE -> {
-                Optional<Resource> currentResource = resourceRepository.findById(resourceAction.getEntityId());
-                if (currentResource.isEmpty()) {
-                    throw new ExecutorPolicyViolationException(action, "Resource not found.");
-                }
+            case DELETE -> this.resourceRepository.findById(resourceAction.getEntityId())
+                    .switchIfEmpty(Mono.error(new ExecutorPolicyViolationException(action, "Resource not found.")))
+                    .map(currentResource -> this.statusBasedOperationValidator.isDeletionAllowed(currentResource.getStatus()))
+                    .doOnSuccess(decision -> logger.info("DELETE decision for entityId={}: {}", 
+                            resourceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN"));
 
-                yield this.statusBasedOperationValidator.isDeletionAllowed(currentResource.get().getStatus());
-            }
-
-            default -> false;
+            default -> Mono.just(false)
+                    .doOnSuccess(decision -> logger.info("DEFAULT decision for entityId={}: FORBIDDEN", 
+                            resourceAction.getEntityId()));
         };
-
-        logger.info("Decision of Execution policy for Action: Type={}, entityId={} is: {}",
-                resourceAction.getActionType(), resourceAction.getEntityId(), decision ? "ALLOWED" : "FORBIDDEN");
-
-        return decision;
     }
 }

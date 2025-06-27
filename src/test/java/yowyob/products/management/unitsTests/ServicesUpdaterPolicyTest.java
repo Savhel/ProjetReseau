@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.Application;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.actions.service.operations.*;
@@ -20,6 +21,7 @@ import yowyob.resource.management.services.policy.validators.transition.ServiceT
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,11 +81,11 @@ public class ServicesUpdaterPolicyTest {
     @Test
     public void testCreateAllowedWhenNoExistingService() {
         ArrayList<Event> events = new ArrayList<>();
-        when(serviceRepository.findById(serviceId)).thenReturn(Optional.empty());
+        when(serviceRepository.findById(serviceId)).thenReturn(Mono.empty());
 
-        boolean result = serviceUpdaterPolicy.isExecutionAllowed(eventCreate, events);
+        Mono<Boolean> result = serviceUpdaterPolicy.isExecutionAllowed(eventCreate, events);
 
-        assertTrue(result, "Create should be allowed when no services exists");
+        assertTrue((BooleanSupplier) result, "Create should be allowed when no services exists");
     }
 
     @Test
@@ -97,7 +99,7 @@ public class ServicesUpdaterPolicyTest {
         events.add(_eventCreate);
         scheduledEvents.put(serviceId, events);
 
-        when(serviceRepository.findById(serviceId)).thenReturn(Optional.of(services));
+        when(serviceRepository.findById(serviceId)).thenReturn(Mono.just(services));
 
         assertThrows(UpdaterPolicyViolationException.class, () ->
                 serviceUpdaterPolicy.isExecutionAllowed(eventCreate, scheduledEvents.get(serviceId)));
@@ -133,12 +135,12 @@ public class ServicesUpdaterPolicyTest {
         ArrayList<Event> events = new ArrayList<>();
         events.add(eventRead);
 
-        when(serviceRepository.findById(serviceId)).thenReturn(Optional.of(services));
+        when(serviceRepository.findById(serviceId)).thenReturn(Mono.just(services));
         when(statusBasedOperationValidator.isDeletionAllowed(any())).thenReturn(true);
 
-        boolean result = serviceUpdaterPolicy.isExecutionAllowed(eventDelete, events);
+        Mono<Boolean> result = serviceUpdaterPolicy.isExecutionAllowed(eventDelete, events);
 
-        assertTrue(result, "DELETE should be allowed when services exists and deletion is valid.");
+        assertTrue((BooleanSupplier) result, "DELETE should be allowed when services exists and deletion is valid.");
     }
 
     @Test
@@ -152,7 +154,7 @@ public class ServicesUpdaterPolicyTest {
         ArrayList<Event> events = new ArrayList<>();
         events.add(eventUpdate);
 
-        when(serviceRepository.findById(serviceId)).thenReturn(Optional.of(services));
+        when(serviceRepository.findById(serviceId)).thenReturn(Mono.just(services));
         when(statusBasedOperationValidator.isDeletionAllowed(any())).thenReturn(false);
 
         assertThrows(UpdaterPolicyViolationException.class, () ->

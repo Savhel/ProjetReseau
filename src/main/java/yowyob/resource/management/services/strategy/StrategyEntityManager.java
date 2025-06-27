@@ -1,5 +1,6 @@
 package yowyob.resource.management.services.strategy;
 
+import reactor.core.publisher.Mono;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -105,29 +106,49 @@ public class StrategyEntityManager {
 
         switch (action.getActionClass()) {
             case Resource -> {
-                if (resourceExecutorPolicy.isExecutionAllowed(action)) {
-                    contextManager.pushAction(action);
-                    resourceActionExecutor.forceActionExecution(action);
-                } else {
-                    throw new ExecutorPolicyViolationException(action,
-                            "Execution of resource action is not allowed by policy");
-                }
+                resourceExecutorPolicy.isExecutionAllowed(action)
+                        .flatMap(isAllowed -> {
+                            if (!isAllowed) {
+                                return Mono.error(new ExecutorPolicyViolationException(action,
+                                        "Execution of resource action is not allowed by policy"));
+                            }
+                            
+                            contextManager.pushAction(action);
+                            return resourceActionExecutor.forceActionExecution(action);
+                        })
+                        .doOnSuccess(result -> {
+                            kafkaStrategyResponseProducer.pushMessage(String.format("Action - Class=%s, Type=%s, EntityId=%s -> status : OK",
+                                    action.getActionClass(), action.getActionType(), action.getEntityId()));
+                        })
+                        .doOnError(error -> {
+                            logger.error("Error processing resource action: {}", error.getMessage());
+                            throw new RuntimeException(error);
+                        })
+                        .block(); // Block here since processCommands is synchronous
             }
             case Service -> {
-                if (serviceExecutorPolicy.isExecutionAllowed(action)) {
-                    contextManager.pushAction(action);
-                    serviceActionExecutor.forceActionExecution(action);
-                } else {
-                    throw new ExecutorPolicyViolationException(action,
-                            "Execution of service action is not allowed by policy");
-                }
+                serviceExecutorPolicy.isExecutionAllowed(action)
+                        .flatMap(isAllowed -> {
+                            if (!isAllowed) {
+                                return Mono.error(new ExecutorPolicyViolationException(action,
+                                        "Execution of service action is not allowed by policy"));
+                            }
+                            
+                            contextManager.pushAction(action);
+                            return serviceActionExecutor.forceActionExecution(action);
+                        })
+                        .doOnSuccess(result -> {
+                            kafkaStrategyResponseProducer.pushMessage(String.format("Action - Class=%s, Type=%s, EntityId=%s -> status : OK",
+                                    action.getActionClass(), action.getActionType(), action.getEntityId()));
+                        })
+                        .doOnError(error -> {
+                            logger.error("Error processing service action: {}", error.getMessage());
+                            throw new RuntimeException(error);
+                        })
+                        .block(); // Block here since processCommands is synchronous
             }
             default -> throw new InvalidActionClassException(action);
         }
-
-        kafkaStrategyResponseProducer.pushMessage(String.format("Action - Class=%s, Type=%s, EntityId=%s -> status : OK",
-                action.getActionClass(), action.getActionType(), action.getEntityId())
-        );
     }
 
     private void processEvent(Event event) {
@@ -137,32 +158,55 @@ public class StrategyEntityManager {
         switch (event.getEventClass()) {
             case Resource -> {
                 List<Event> events = !resourceUpdater.getScheduledEvents().containsKey(event.getEntityId())
-                        ? new ArrayList<>() : resourceUpdater.getScheduledEvents().get(event.getEntityId()) ;
+                        ? new ArrayList<>() : resourceUpdater.getScheduledEvents().get(event.getEntityId());
 
-                if (resourceUpdaterPolicy.isExecutionAllowed(event, events)) {
-                    contextManager.pushEvent(event);
-                    resourceUpdater.forceEventScheduling(event);
-                } else {
-                    throw new UpdaterPolicyViolationException(event,
-                            "Scheduling of resource event is not allowed by policy");
-                }
+                resourceUpdaterPolicy.isExecutionAllowed(event, events)
+                        .flatMap(isAllowed -> {
+                            if (!isAllowed) {
+                                return Mono.error(new UpdaterPolicyViolationException(event,
+                                        "Scheduling of resource event is not allowed by policy"));
+                            }
+                            
+                            contextManager.pushEvent(event);
+                            resourceUpdater.forceEventScheduling(event);
+                            return Mono.just("success");
+                        })
+                        .doOnSuccess(result -> {
+                            kafkaStrategyResponseProducer.pushMessage(String.format("Event - Class=%s, ActionType=%s, EntityId=%s -> status : OK",
+                                    event.getEventClass(), event.getAction().getActionType(), event.getEntityId()));
+                        })
+                        .doOnError(error -> {
+                            logger.error("Error processing resource event: {}", error.getMessage());
+                            throw new RuntimeException(error);
+                        })
+                        .block(); // Block here since processCommands is synchronous
             }
             case Service -> {
-                if (serviceUpdaterPolicy.isExecutionAllowed(event,
-                        serviceUpdater.getScheduledEvents().get(event.getEntityId()))) {
-                    contextManager.pushEvent(event);
-                    serviceUpdater.forceEventScheduling(event);
-                } else {
-                    throw new UpdaterPolicyViolationException(event,
-                            "Scheduling of resource event is not allowed by policy");
-                }
+                List<Event> serviceEvents = serviceUpdater.getScheduledEvents().get(event.getEntityId());
+                
+                serviceUpdaterPolicy.isExecutionAllowed(event, serviceEvents)
+                        .flatMap(isAllowed -> {
+                            if (!isAllowed) {
+                                return Mono.error(new UpdaterPolicyViolationException(event,
+                                        "Scheduling of service event is not allowed by policy"));
+                            }
+                            
+                            contextManager.pushEvent(event);
+                            serviceUpdater.forceEventScheduling(event);
+                            return Mono.just("success");
+                        })
+                        .doOnSuccess(result -> {
+                            kafkaStrategyResponseProducer.pushMessage(String.format("Event - Class=%s, ActionType=%s, EntityId=%s -> status : OK",
+                                    event.getEventClass(), event.getAction().getActionType(), event.getEntityId()));
+                        })
+                        .doOnError(error -> {
+                            logger.error("Error processing service event: {}", error.getMessage());
+                            throw new RuntimeException(error);
+                        })
+                        .block(); // Block here since processCommands is synchronous
             }
             default -> throw new InvalidEventClassException(event);
         }
-
-        kafkaStrategyResponseProducer.pushMessage(String.format("Event - Class=%s, ActionType=%s, EntityId=%s -> status : OK",
-                event.getEventClass(), event.getAction().getActionType(), event.getEntityId())
-        );
     }
 
     private void handleError(Exception e) {

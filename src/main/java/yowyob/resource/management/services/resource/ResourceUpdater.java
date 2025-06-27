@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.resource.ResourceAction;
 import yowyob.resource.management.events.Event;
 import yowyob.resource.management.events.enums.EventClass;
@@ -73,11 +74,18 @@ public class ResourceUpdater implements Updater {
 
                 ResourceEvent resourceEvent = (ResourceEvent) event;
                 logger.info("Processing Resource Event for entityId: {}", resourceEvent.getEntityId());
-                if (this.resourceUpdaterPolicy.isExecutionAllowed(resourceEvent,
+                this.resourceUpdaterPolicy.isExecutionAllowed(resourceEvent,
                         this.scheduledEvents.getOrDefault(resourceEvent.getEntityId(), new ArrayList<>()))
-                ) {
-                    scheduleTask(resourceEvent);
-                }
+                        .doOnSuccess(allowed -> {
+                            if (allowed) {
+                                scheduleTask(resourceEvent);
+                            }
+                        })
+                        .doOnError(error -> {
+                            logger.error("Policy violation for Resource Event with entityId: {}: {}", 
+                                    resourceEvent.getEntityId(), error.getMessage());
+                        })
+                        .subscribe();
             }
         }
         } finally {
@@ -119,12 +127,18 @@ public class ResourceUpdater implements Updater {
                 resourceEvent.getEntityId(), executionTime);
     }
 
-    private void executeAction(ResourceAction action) throws ExecutorPolicyViolationException {
+    private void executeAction(ResourceAction action) {
         logger.info("Executing scheduled Resource Action for entityId: {}", action.getEntityId());
-        this.resourceActionExecutor.executeAction(action);
-        scheduledEvents.remove(action.getEntityId());
-
-        logger.info("Successfully executed scheduled Resource Action for entityId: {}", action.getEntityId());
+        this.resourceActionExecutor.executeAction(action)
+                .doOnSuccess(result -> {
+                    scheduledEvents.remove(action.getEntityId());
+                    logger.info("Successfully executed scheduled Resource Action for entityId: {}", action.getEntityId());
+                })
+                .doOnError(error -> {
+                    logger.error("Failed to execute scheduled Resource Action for entityId: {}: {}", 
+                            action.getEntityId(), error.getMessage());
+                })
+                .subscribe();
     }
 
     public void unscheduleEvent(Event event) {

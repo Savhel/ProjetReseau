@@ -4,10 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
 
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.repositories.service.ServiceRepository;
 import yowyob.resource.management.services.interfaces.executors.Executor;
@@ -15,7 +13,6 @@ import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.services.policy.executors.ServiceExecutorPolicy;
 import yowyob.resource.management.exceptions.policy.ExecutorPolicyViolationException;
 
-import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -29,7 +26,7 @@ public class ServiceActionExecutor implements Executor {
     private final ExecutorService executorService;
     private static final Logger logger = LoggerFactory.getLogger(ServiceActionExecutor.class);
     private static final int THREAD_POOL_SIZE = 10;
-    
+
     @Autowired
     public ServiceActionExecutor(ServiceExecutorPolicy serviceExecutorPolicy,
                                  ServiceRepository serviceRepository) {
@@ -43,38 +40,41 @@ public class ServiceActionExecutor implements Executor {
             });
     }
 
-    public Optional<?> executeAction(Action action) throws ExecutorPolicyViolationException {
+    public Mono<?> executeAction(Action action) {
         if (paused.get()) {
             waitingActions.add(action);
             logger.warn("ServiceActionExecutor is paused. Action of Type={} with entityId={} has been queued.",
                     action.getActionType(),
                     action.getEntityId());
-            return Optional.empty();
+            return Mono.empty();
         }
 
         logger.info("{} for entityId: {}",
                 action.getActionType(), action.getEntityId());
 
-        if (!this.serviceExecutorPolicy.isExecutionAllowed(action)) {
-            throw new ExecutorPolicyViolationException(
-                    action,
-                    String.format("Execution of service action %s is not allowed by policy",
-                            action.getClass().getSimpleName())
-            );
-        }
-
-        return executeServiceAction(action);
+        return this.serviceExecutorPolicy.isExecutionAllowed(action)
+                .flatMap(isAllowed -> {
+                    if (!isAllowed) {
+                        return Mono.error(new ExecutorPolicyViolationException(
+                                action,
+                                String.format("Execution of service action %s is not allowed by policy",
+                                        action.getClass().getSimpleName())
+                        ));
+                    }
+                    
+                    return executeServiceAction(action);
+                });
     }
 
-    public Optional<?> forceActionExecution(Action action) {
+    public Mono<?> forceActionExecution(Action action) {
         logger.warn("Action execution of {} for entityId: {} without Policy verification",
                 action.getActionType(), action.getEntityId());
         return executeServiceAction(action);
     }
 
-    private Optional<?> executeServiceAction(Action action) {
+    private Mono<?> executeServiceAction(Action action) {
         ServiceAction serviceAction = (ServiceAction) action;
-        Optional<?> result = serviceAction.execute(this.serviceRepository);
+        Mono<?> result = serviceAction.execute(this.serviceRepository);
         logger.info("Action execution completed for Action: {} with entityId: {}",
                 serviceAction.getActionType(), serviceAction.getEntityId());
         return result;

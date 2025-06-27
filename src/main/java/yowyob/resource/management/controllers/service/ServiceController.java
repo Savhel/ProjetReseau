@@ -6,10 +6,11 @@ import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.services.product.ProductEntityManager;
@@ -32,52 +33,50 @@ public class ServiceController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createService(@RequestBody Services services) {
-        productEntityManager.executeAction(new ServiceCreationAction(services));
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+    public Mono<Services> createService(@RequestBody Services service) {
+        return productEntityManager.executeAction(new ServiceCreationAction(service))
+                .cast(Services.class);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getServiceById(@PathVariable UUID id) {
-        ServiceAction action = new ServiceReadingAction(id);
-        return ResponseEntity.ok(productEntityManager.executeAction(action));
+    public Mono<Services> getServiceById(@PathVariable UUID id) {
+        Action action = new ServiceReadingAction(id);
+        return productEntityManager.executeAction(action)
+                .cast(Services.class);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateService(@RequestBody Services services) {
-        ServiceAction action = new ServiceUpdateAction(services);
-        return ResponseEntity.ok(productEntityManager.executeAction(action));
+    public Mono<Services> updateService(@RequestBody Services service) {
+        ServiceUpdateAction action = new ServiceUpdateAction(service);
+        return productEntityManager.executeAction(action)
+                .cast(Services.class);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteService(@PathVariable UUID id) {
-        productEntityManager.executeAction(new ServiceDeletionAction(id));
-        return ResponseEntity.noContent().build();
+    public Mono<Void> deleteService(@PathVariable UUID id) {
+        return productEntityManager.executeAction(new ServiceDeletionAction(id))
+                .then();
     }
 
 
     @PostMapping("/schedule/create")
-    public ResponseEntity<?> scheduleCreate(@RequestBody Services services, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ServiceCreationAction(services));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleCreate(@RequestBody Services service, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ServiceCreationAction(service));
     }
 
     /* Just for testing, must delete later */
     @PostMapping("/schedule/read/{id}")
-    public ResponseEntity<?> scheduleCreate(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ServiceReadingAction(id));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleRead(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ServiceReadingAction(id));
     }
 
     @PutMapping("/schedule/update")
-    public ResponseEntity<?> scheduleUpdate(@RequestBody Services services, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ServiceUpdateAction(services));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleUpdate(@RequestBody Services service, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ServiceUpdateAction(service));
     }
 
     @DeleteMapping("/schedule/delete/{id}")
-    public ResponseEntity<?> scheduleDelete(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ServiceDeletionAction(id));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleDelete(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ServiceDeletionAction(id));
     }
 }

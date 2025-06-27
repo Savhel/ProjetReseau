@@ -1,9 +1,9 @@
 package yowyob.resource.management.controllers.resource;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import reactor.core.publisher.Mono;
 
 import java.util.UUID;
 import java.time.LocalDateTime;
@@ -27,52 +27,50 @@ public class ResourceController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createResource(@RequestBody Resource resource) {
-        productEntityManager.executeAction(new ResourceCreationAction(resource));
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+    public Mono<Resource> createResource(@RequestBody Resource resource) {
+        return productEntityManager.executeAction(new ResourceCreationAction(resource))
+                .cast(Resource.class);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getResourceById(@PathVariable UUID id) {
+    public Mono<Resource> getResourceById(@PathVariable UUID id) {
         Action action = new ResourceReadingAction(id);
-        return ResponseEntity.ok(productEntityManager.executeAction(action));
+        return productEntityManager.executeAction(action)
+                .cast(Resource.class);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateResource(@RequestBody Resource resource) {
+    public Mono<Resource> updateResource(@RequestBody Resource resource) {
         ResourceUpdateAction action = new ResourceUpdateAction(resource);
-        return ResponseEntity.ok(productEntityManager.executeAction(action));
+        return productEntityManager.executeAction(action)
+                .cast(Resource.class);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteResource(@PathVariable UUID id) {
-        productEntityManager.executeAction(new ResourceDeletionAction(id));
-        return ResponseEntity.noContent().build();
+    public Mono<Void> deleteResource(@PathVariable UUID id) {
+        return productEntityManager.executeAction(new ResourceDeletionAction(id))
+                .then();
     }
 
 
     @PostMapping("/schedule/create")
-    public ResponseEntity<?> scheduleCreate(@RequestBody Resource resource, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ResourceCreationAction(resource));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleCreate(@RequestBody Resource resource, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ResourceCreationAction(resource));
     }
 
     /* Just for testing, must delete later */
     @PostMapping("/schedule/read/{id}")
-    public ResponseEntity<?> scheduleCreate(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ResourceReadingAction(id));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleRead(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ResourceReadingAction(id));
     }
 
     @PutMapping("/schedule/update")
-    public ResponseEntity<?> scheduleUpdate(@RequestBody Resource resource, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ResourceUpdateAction(resource));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleUpdate(@RequestBody Resource resource, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ResourceUpdateAction(resource));
     }
 
     @DeleteMapping("/schedule/delete/{id}")
-    public ResponseEntity<?> scheduleDelete(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
-        this.productEntityManager.scheduleEvent(startDateTime, new ResourceDeletionAction(id));
-        return ResponseEntity.accepted().build();
+    public Mono<Void> scheduleDelete(@PathVariable UUID id, @RequestParam LocalDateTime startDateTime) {
+        return this.productEntityManager.scheduleEvent(startDateTime, new ResourceDeletionAction(id));
     }
 }

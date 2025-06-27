@@ -3,6 +3,7 @@ package yowyob.resource.management.services.strategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.stereotype.Service;
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.actions.resource.ResourceAction;
 import yowyob.resource.management.actions.resource.operations.ResourceCreationAction;
@@ -20,7 +21,7 @@ import yowyob.resource.management.exceptions.StrategyConversionException;
 
 import java.util.List;
 
-@org.springframework.stereotype.Service
+@Service
 public class StrategyBuilder {
     private final ObjectMapper objectMapper;
 
@@ -89,7 +90,7 @@ public class StrategyBuilder {
             switch (serviceAction.getActionType()) {
                 case CREATE -> {
                     ServiceCreationAction createAction = (ServiceCreationAction) serviceAction;
-                    actionNode.set("params", objectMapper.valueToTree(createAction.getServicesToSave()));
+                    actionNode.set("params", objectMapper.valueToTree(createAction.getServiceToSave()));
                 }
                 case UPDATE -> {
                     ServiceUpdateAction updateAction = (ServiceUpdateAction) serviceAction;

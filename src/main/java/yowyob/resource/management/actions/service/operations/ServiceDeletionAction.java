@@ -1,25 +1,25 @@
 package yowyob.resource.management.actions.service.operations;
 
 import lombok.Getter;
-import org.springframework.data.cassandra.repository.CassandraRepository;
+import org.springframework.data.cassandra.repository.ReactiveCassandraRepository;
+import yowyob.resource.management.actions.enums.ActionClass;
 import yowyob.resource.management.actions.enums.ActionType;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.repositories.service.ServiceRepository;
+import reactor.core.publisher.Mono;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Getter
 public class ServiceDeletionAction extends ServiceAction {
 
-    public ServiceDeletionAction(UUID entityID) {
-        super(entityID, ActionType.DELETE);
+    public ServiceDeletionAction(UUID serviceId) {
+        super(serviceId, ActionType.DELETE, ActionClass.Service);
     }
 
     @Override
-    public Optional<?> execute(CassandraRepository<?, ?> repository) {
+    public Mono<Void> execute(ReactiveCassandraRepository<?, ?> repository) {
         ServiceRepository serviceRepository = (ServiceRepository) repository;
-        serviceRepository.deleteById(this.getEntityId());
-        return Optional.empty();
+        return serviceRepository.deleteById(this.getEntityId());
     }
 }

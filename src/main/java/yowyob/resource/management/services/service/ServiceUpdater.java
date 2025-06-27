@@ -7,11 +7,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.service.ServiceAction;
 import yowyob.resource.management.events.Event;
 import yowyob.resource.management.events.enums.EventClass;
 import yowyob.resource.management.events.service.ServiceEvent;
-import yowyob.resource.management.exceptions.policy.ExecutorPolicyViolationException;
 import yowyob.resource.management.exceptions.policy.UpdaterPolicyViolationException;
 import yowyob.resource.management.services.interfaces.updaters.Updater;
 import yowyob.resource.management.services.policy.updaters.ServiceUpdaterPolicy;
@@ -55,32 +55,46 @@ public class ServiceUpdater implements Updater {
 
     @Override
     @EventListener
-    public void handleEvent(Event event) throws ExecutorPolicyViolationException, UpdaterPolicyViolationException {
+    public Mono<Void> handleEvent(Event event) {
         eventLock.writeLock().lock();
         try {
-        if (event != null) {
+            if (event == null) {
+                return Mono.empty();
+            }
+
             logger.info("Received event of class: {} {}", event.getEventClass(),
                     event.getEventClass() == EventClass.Service ? "" : "unmanaged, passing");
 
-            if (event.getEventClass() == EventClass.Service) {
-                if (paused.get()) {
-                    this.waitingEvents.add(event);
-                    logger.warn("ServiceUpdater is paused. Event of class={} with entityId={} scheduled at {} has been queued.",
-                            event.getEventClass(),
-                            event.getEntityId(),
-                            event.getEventStartDateTime());
-                    return;
-                }
-
-                logger.info("Processing Services Event for entityId: {}",
-                        event.getEntityId());
-                if (this.serviceUpdaterPolicy.isExecutionAllowed(event,
-                        this.scheduledEvents.getOrDefault(event.getEntityId(), new ArrayList<>()))
-                ) {
-                    scheduleTask((ServiceEvent) event);
-                }
+            if (event.getEventClass() != EventClass.Service) {
+                return Mono.empty();
             }
-        }
+
+            if (paused.get()) {
+                this.waitingEvents.add(event);
+                logger.warn("ServiceUpdater is paused. Event of class={} with entityId={} scheduled at {} has been queued.",
+                        event.getEventClass(),
+                        event.getEntityId(),
+                        event.getEventStartDateTime());
+                return Mono.empty();
+            }
+
+            logger.info("Processing Services Event for entityId: {}", event.getEntityId());
+
+            return this.serviceUpdaterPolicy.isExecutionAllowed(
+                            event,
+                            this.scheduledEvents.getOrDefault(event.getEntityId(), new ArrayList<>())
+                    )
+                    .flatMap(allowed -> {
+                        if (allowed) {
+                            scheduleTask((ServiceEvent) event);
+                        }
+                        return Mono.empty();
+                    })
+                    .onErrorResume(error -> {
+                        logger.error("Policy violation for Service Event with entityId: {}: {}",
+                                event.getEntityId(), error.getMessage());
+                        return Mono.empty();
+                    }).then();
         } finally {
             eventLock.writeLock().unlock();
         }
@@ -122,10 +136,16 @@ public class ServiceUpdater implements Updater {
 
     private void executeAction(ServiceAction action) {
         logger.info("Executing scheduled Services Action for entityId: {}", action.getEntityId());
-        this.serviceActionExecutor.executeAction(action);
-        scheduledEvents.remove(action.getEntityId());
-
-        logger.info("Successfully executed scheduled Services Action for entityId: {}", action.getEntityId());
+        this.serviceActionExecutor.executeAction(action)
+                .doOnSuccess(result -> {
+                    scheduledEvents.remove(action.getEntityId());
+                    logger.info("Successfully executed scheduled Services Action for entityId: {}", action.getEntityId());
+                })
+                .doOnError(error -> {
+                    logger.error("Failed to execute scheduled Services Action for entityId: {}: {}", 
+                            action.getEntityId(), error.getMessage());
+                })
+                .subscribe();
     }
 
     public void unscheduleEvent(Event event) {

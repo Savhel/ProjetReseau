@@ -1,11 +1,10 @@
 package yowyob.resource.management.actions.service.operations;
 
 import java.util.UUID;
-import java.util.Optional;
 
 import lombok.Getter;
-
-import org.springframework.data.cassandra.repository.CassandraRepository;
+import reactor.core.publisher.Mono;
+import org.springframework.data.cassandra.repository.ReactiveCassandraRepository;
 import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.actions.enums.ActionType;
 import yowyob.resource.management.actions.service.ServiceAction;
@@ -15,13 +14,12 @@ import yowyob.resource.management.repositories.service.ServiceRepository;
 public class ServiceReadingAction extends ServiceAction {
 
     public ServiceReadingAction(UUID entityId) {
-        super(entityId, ActionType.READ);
+        super(entityId, ActionType.READ, ActionClass.Service);
     }
 
     @Override
-    public Optional<Services> execute(CassandraRepository<?, ?> repository) {
+    public Mono<Services> execute(ReactiveCassandraRepository<?, ?> repository) {
         ServiceRepository serviceRepository = (ServiceRepository) repository;
-        Services readServices = serviceRepository.findById(this.getEntityId()).get();
-        return Optional.of(readServices);
+        return serviceRepository.findById(this.getEntityId());
     }
 }

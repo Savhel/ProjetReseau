@@ -1,8 +1,7 @@
 package yowyob.resource.management.actions.service.operations;
 
-import java.util.Optional;
-
 import lombok.Getter;
+import reactor.core.publisher.Mono;
 
 import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.actions.enums.ActionType;
@@ -12,17 +11,16 @@ import org.springframework.data.cassandra.repository.CassandraRepository;
 
 @Getter
 public class ServiceCreationAction extends ServiceAction {
-    private final Services servicesToSave;
+    private final Services serviceToSave;
     
-    public ServiceCreationAction(Services services) {
-        super(services.getId(), ActionType.CREATE);
-        this.servicesToSave = services;
+    public ServiceCreationAction(Services service) {
+        super(service.getId(), ActionType.CREATE);
+        this.serviceToSave = service;
     }
 
     @Override
-    public Optional<Services> execute(CassandraRepository<?, ?> repository) {
+    public Mono<Services> execute(CassandraRepository<?, ?> repository) {
         ServiceRepository serviceRepository = (ServiceRepository) repository;
-        Services services = serviceRepository.save(this.servicesToSave);
-        return Optional.of(services);
+        return serviceRepository.save(this.serviceToSave);
     }
 }

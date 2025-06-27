@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import reactor.core.publisher.Mono;
 
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.actions.enums.ActionClass;
@@ -31,7 +32,7 @@ public class ProductEntityManager {
         this.resourceEntityManager = resourceEntityManager;
     }
 
-    public Optional<?> executeAction(Action action) throws InvalidActionClassException, ExecutorPolicyViolationException {
+    public Mono<?> executeAction(Action action) throws InvalidActionClassException, ExecutorPolicyViolationException {
         logger.info("Received Action      : Type={}, Class={}, entityId={}",
                 action.getActionType(),
                 action.getActionClass(),
@@ -40,21 +41,21 @@ public class ProductEntityManager {
         return switch (action.getActionClass()) {
             case ActionClass.Resource -> this.resourceEntityManager.executeAction((ResourceAction) action);
             case ActionClass.Service -> this.serviceEntityManager.executeAction((ServiceAction) action);
-            default -> throw new InvalidActionClassException(action);
+            default -> Mono.error(new InvalidActionClassException(action));
         };
     }
 
-    public void scheduleEvent(LocalDateTime eventStartDateTime, Action action) throws InvalidEventClassException, UpdaterPolicyViolationException {
+    public Mono<Void> scheduleEvent(LocalDateTime eventStartDateTime, Action action) throws InvalidEventClassException, UpdaterPolicyViolationException {
         logger.info("Scheduling action: {} of Class: {} for entityId: {} at : {}",
                 action.getActionType(),
                 action.getActionClass(),
                 action.getEntityId(),
                 eventStartDateTime);
 
-        switch (action.getActionClass()) {
+        return switch (action.getActionClass()) {
             case ActionClass.Resource -> this.resourceEntityManager.triggerResourceEvent((ResourceAction) action, eventStartDateTime);
             case ActionClass.Service -> this.serviceEntityManager.triggerServiceEvent((ServiceAction) action, eventStartDateTime);
-            default -> throw  new InvalidEventClassException(action, eventStartDateTime);
-        }
+            default -> Mono.error(new InvalidEventClassException(action, eventStartDateTime));
+        };
     }
 }

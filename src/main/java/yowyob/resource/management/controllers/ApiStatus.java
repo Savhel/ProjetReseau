@@ -1,6 +1,6 @@
 package yowyob.resource.management.controllers;
 
-import org.springframework.http.ResponseEntity;
+import reactor.core.publisher.Mono;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,7 +13,7 @@ import java.util.UUID;
 public class ApiStatus {
 
     @GetMapping
-    public ResponseEntity<String> getServiceById() {
-        return ResponseEntity.ok("resource/service api is up xD");
+    public Mono<String> getServiceById() {
+        return Mono.just("resource/service api is up xD");
     }
 }

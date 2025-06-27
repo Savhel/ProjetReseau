@@ -11,6 +11,7 @@ import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.Application;
 import yowyob.resource.management.actions.enums.ActionType;
 import yowyob.resource.management.actions.resource.ResourceAction;
@@ -28,6 +29,7 @@ import yowyob.resource.management.services.policy.validators.transition.Resource
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -64,36 +66,36 @@ class ResourceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_CreateAction_ResourceDoesNotExist_ShouldAllow() throws ExecutorPolicyViolationException {
 
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.empty());
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.empty());
         ResourceAction action = new ResourceCreationAction(resource);
 
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
     void isExecutionAllowed_CreateAction_ResourceExists_ShouldNotAllow() throws ExecutorPolicyViolationException {
 
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         ResourceAction action = new ResourceCreationAction(resource);
 
-        assertFalse(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertFalse((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
     void isExecutionAllowed_ReadAction_ResourceExists_ShouldAllow() throws ExecutorPolicyViolationException {
 
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         ResourceAction action = new ResourceReadingAction(entityId);
 
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
     void isExecutionAllowed_ReadAction_ResourceDoesNotExist_ShouldNotAllow() throws ExecutorPolicyViolationException {
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.empty());
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.empty());
         ResourceAction action = new ResourceReadingAction(entityId);
 
-        assertFalse(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertFalse((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
@@ -106,10 +108,10 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.FREE, ResourceStatus.AFFECTED)).thenReturn(true);
 
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
@@ -121,7 +123,7 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.FREE, ResourceStatus.IN_USE)).thenReturn(false);
 
         assertThrows(ExecutorPolicyViolationException.class, () -> resourceExecutorPolicy.isExecutionAllowed(action));
@@ -129,16 +131,16 @@ class ResourceExecutorPolicyTest {
 
     @Test
     void isExecutionAllowed_DeleteAction_ResourceExistsAndDeletionAllowed_ShouldAllow() throws ExecutorPolicyViolationException {
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(statusValidator.isDeletionAllowed(ResourceStatus.FREE)).thenReturn(true);
         ResourceAction action = new ResourceDeletionAction(entityId);
 
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
     void isExecutionAllowed_DeleteAction_ResourceDoesNotExist_ShouldThrowException() {
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.empty());
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.empty());
         ResourceAction action = new ResourceDeletionAction(entityId);
 
         assertThrows(ExecutorPolicyViolationException.class, () -> resourceExecutorPolicy.isExecutionAllowed(action));
@@ -147,11 +149,11 @@ class ResourceExecutorPolicyTest {
     @Test
     void isExecutionAllowed_DeleteAction_ResourceExistsButDeletionNotAllowed_ShouldNotAllow() throws ExecutorPolicyViolationException {
 
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(statusValidator.isDeletionAllowed(ResourceStatus.IN_USE)).thenReturn(false);
         ResourceAction action = new ResourceDeletionAction(entityId);
 
-        assertFalse(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertFalse((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     // Tests pour les transitions depuis l'état FREE
@@ -165,11 +167,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.FREE, ResourceStatus.FREE)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
@@ -182,11 +184,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.FREE, ResourceStatus.AFFECTED)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     // Tests pour les transitions depuis l'état AFFECTED
@@ -201,11 +203,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.AFFECTED, ResourceStatus.FREE)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
@@ -219,11 +221,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.AFFECTED, ResourceStatus.AFFECTED)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
@@ -237,11 +239,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.AFFECTED, ResourceStatus.IN_USE)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     // Tests pour les transitions depuis l'état IN_USE
@@ -256,11 +258,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.IN_USE, ResourceStatus.FREE)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     @Test
@@ -274,11 +276,11 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.IN_USE, ResourceStatus.IN_USE)).thenReturn(true);
 
         // Act & Assert
-        assertTrue(resourceExecutorPolicy.isExecutionAllowed(action));
+        assertTrue((BooleanSupplier) resourceExecutorPolicy.isExecutionAllowed(action));
     }
 
     // Tests pour les transitions invalides
@@ -292,7 +294,7 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.FREE, ResourceStatus.IN_USE)).thenReturn(false);
 
         // Act & Assert
@@ -310,7 +312,7 @@ class ResourceExecutorPolicyTest {
         when(action.getEntityId()).thenReturn(entityId);
         when(action.getActionType()).thenReturn(ActionType.UPDATE);
         when(action.getResourceToUpdate()).thenReturn(updatedResource);
-        when(resourceRepository.findById(entityId)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(entityId)).thenReturn(Mono.just(resource));
         when(transitionValidator.isTransitionAllowed(ResourceStatus.IN_USE, ResourceStatus.AFFECTED)).thenReturn(false);
 
         // Act & Assert

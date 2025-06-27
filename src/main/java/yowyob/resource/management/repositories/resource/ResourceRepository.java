@@ -2,9 +2,9 @@ package yowyob.resource.management.repositories.resource;
 
 import java.util.UUID;
 
+import org.springframework.data.cassandra.repository.ReactiveCassandraRepository;
 import yowyob.resource.management.models.resource.Resource;
-import org.springframework.data.cassandra.repository.CassandraRepository;
 
 
-public interface ResourceRepository extends CassandraRepository<Resource, UUID> {
+public interface ResourceRepository extends ReactiveCassandraRepository<Resource, UUID> {
 }

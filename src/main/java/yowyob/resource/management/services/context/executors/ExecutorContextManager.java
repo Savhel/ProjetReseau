@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import org.springframework.cache.annotation.Cacheable;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.actions.Action;
 import yowyob.resource.management.models.service.Services;
 import yowyob.resource.management.models.resource.Resource;
@@ -52,36 +54,42 @@ public class ExecutorContextManager {
         logger.info("Context has been successfully cleared");
     }
 
-    public Action generateReverseAction(Action action) {
+    @Cacheable("reverse-actions")
+    public Mono<Action> generateReverseAction(Action action) {
         return switch (action.getActionClass()) {
             case Resource -> {
                 ResourceAction resourceAction = (ResourceAction) action;
-                Optional<Resource> initialResource = this.resourceRepository.findById(resourceAction.getEntityId());
 
                 yield switch (resourceAction.getActionType()) {
-                    case CREATE -> new ResourceDeletionAction(resourceAction.getEntityId());
-                    case UPDATE -> new ResourceUpdateAction(initialResource.get()); // Executors policy already manage empty case, no worries
-                    case DELETE -> new ResourceCreationAction(initialResource.get()); // Executors policy already manage empty case, no worries
-                    default -> null;
+                    case CREATE -> Mono.just(new ResourceDeletionAction(resourceAction.getEntityId()));
+                    case UPDATE -> this.resourceRepository.findById(resourceAction.getEntityId())
+                            .map(ResourceUpdateAction::new)
+                            .cast(Action.class);
+                    case DELETE -> this.resourceRepository.findById(resourceAction.getEntityId())
+                            .map(ResourceCreationAction::new)
+                            .cast(Action.class);
+                    default -> Mono.empty();
                 };
             }
 
             case Service -> {
                 ServiceAction serviceAction = (ServiceAction) action;
-                Optional<Services> initialService = this.serviceRepository.findById(serviceAction.getEntityId());
 
                 yield switch (serviceAction.getActionType()) {
-                    case CREATE -> new ServiceDeletionAction(serviceAction.getEntityId());
-                    case UPDATE -> new ServiceUpdateAction(initialService.get()); // Executors policy already manage empty case, no worries
-                    case DELETE -> new ServiceCreationAction(initialService.get()); // Executors policy already manage empty case, no worries
-                    default -> null;
+                    case CREATE -> Mono.just(new ServiceDeletionAction(serviceAction.getEntityId()));
+                    case UPDATE -> this.serviceRepository.findById(serviceAction.getEntityId())
+                            .map(ServiceUpdateAction::new)
+                            .cast(Action.class);
+                    case DELETE -> this.serviceRepository.findById(serviceAction.getEntityId())
+                            .map(ServiceCreationAction::new)
+                            .cast(Action.class);
+                    default -> Mono.empty();
                 };
             }
 
-            default -> throw new InvalidActionClassException(action);
+            default -> Mono.error(new InvalidActionClassException(action));
         };
     }
-
     private void pauseExecutor() {
         this.serviceActionExecutor.pause();
         this.resourceActionExecutor.pause();

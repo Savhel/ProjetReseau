@@ -1,11 +1,11 @@
 package yowyob.resource.management.services.service;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import reactor.core.publisher.Mono;
 import yowyob.resource.management.events.service.ServiceEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import yowyob.resource.management.actions.service.ServiceAction;
@@ -24,14 +24,15 @@ public class ServiceEntityManager {
         this.serviceActionExecutor = serviceActionExecutor;
     }
 
-    public void triggerServiceEvent(ServiceAction action, LocalDateTime eventStartDateTime) {
+    public Mono<Void> triggerServiceEvent(ServiceAction action, LocalDateTime eventStartDateTime) {
         logger.info("Triggering Services Event for entityId: {} with action: {} at: {}",
                 action.getEntityId(), action.getActionType(), eventStartDateTime);
 
         eventPublisher.publishEvent(new ServiceEvent(this, action, eventStartDateTime));
+        return Mono.empty();
     }
 
-    public Optional<?> executeAction(ServiceAction serviceAction) {
+    public Mono<?> executeAction(ServiceAction serviceAction) {
         logger.info("Executing Services Action: {} for entityId: {}",
                 serviceAction.getActionType(), serviceAction.getEntityId());
 
