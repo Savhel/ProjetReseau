@@ -4,15 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import yowyob.resource.management.events.Event;
-import yowyob.resource.management.exceptions.invalid.InvalidEventClassException;
 import yowyob.resource.management.services.resource.ResourceUpdater;
 import yowyob.resource.management.services.service.ServiceUpdater;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Stack;
-import java.util.UUID;
 
 @Service
 public class UpdaterContextManager {
